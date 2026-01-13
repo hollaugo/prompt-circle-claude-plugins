@@ -3,26 +3,29 @@
 //
 // These hooks provide reactive access to the ChatGPT Apps SDK (window.openai)
 // and handle theme synchronization with shadcn/ui components.
+//
+// IMPORTANT: Uses the openai:set_globals event pattern recommended by the SDK
+// See: https://developers.openai.com/apps-sdk/build/chatgpt-ui
 
-import { useState, useEffect, useCallback, useLayoutEffect } from "react";
+import { useState, useEffect, useCallback, useLayoutEffect, useSyncExternalStore } from "react";
 
 declare global {
   interface Window {
     openai?: {
-      // Tool data
-      toolInput?: unknown;
-      toolOutput?: unknown;
-      toolResponseMetadata?: unknown;
-
-      // Environment
-      theme?: "light" | "dark";
-      displayMode?: "inline" | "fullscreen" | "pip";
-      locale?: string;
-      maxHeight?: number;
+      // Tool data - populated by ChatGPT when widget loads
+      toolInput?: unknown;        // Arguments passed to the tool
+      toolOutput?: unknown;       // structuredContent from tool response (model sees this)
+      toolResponseMetadata?: unknown; // _meta from tool response (only widget sees this)
 
       // Widget state persistence
       widgetState?: unknown;
       setWidgetState?: (state: unknown) => void;
+
+      // Environment
+      theme?: "light" | "dark";
+      displayMode?: "inline" | "fullscreen" | "pip";
+      locale?: string;            // BCP 47 language code (e.g., "en-US")
+      maxHeight?: number;
 
       // Actions
       requestDisplayMode?: (mode: "inline" | "fullscreen" | "pip") => Promise<void>;
@@ -31,40 +34,59 @@ declare global {
       requestClose?: () => void;
       notifyIntrinsicHeight?: (height: number) => void;
 
-      // File handling
+      // File handling (supports PNG, JPEG, WebP)
       uploadFile?: (file: File) => Promise<{ fileId: string }>;
       getFileDownloadUrl?: (options: { fileId: string }) => Promise<{ url: string }>;
 
-      // External links
+      // External links (must be in redirect_domains CSP)
       openExternal?: (options: { href: string }) => void;
     };
   }
 }
 
+// Type for OpenAI globals
+type OpenAiGlobals = NonNullable<Window["openai"]>;
+
 /**
  * Generic hook to access window.openai properties reactively
+ * Uses the openai:set_globals event + useSyncExternalStore pattern
+ * as recommended by the ChatGPT Apps SDK documentation
  */
-export function useOpenAiGlobal<K extends keyof NonNullable<Window["openai"]>>(
+export function useOpenAiGlobal<K extends keyof OpenAiGlobals>(
   key: K
-): NonNullable<Window["openai"]>[K] | undefined {
-  const [value, setValue] = useState(() => window.openai?.[key]);
+): OpenAiGlobals[K] | undefined {
+  return useSyncExternalStore(
+    // Subscribe function
+    (onChange) => {
+      // Listen for the openai:set_globals event (fires when data becomes available)
+      const handleSetGlobals = () => {
+        onChange();
+      };
+      window.addEventListener("openai:set_globals", handleSetGlobals);
 
-  useEffect(() => {
-    const check = () => {
-      const newValue = window.openai?.[key];
-      setValue((prev) => (prev !== newValue ? newValue : prev));
-    };
+      // Also poll briefly as a fallback (in case event already fired)
+      let pollCount = 0;
+      const pollInterval = setInterval(() => {
+        pollCount++;
+        onChange();
+        if (pollCount > 30) clearInterval(pollInterval); // Stop after 3 seconds
+      }, 100);
 
-    check();
-    const interval = setInterval(check, 100);
-    return () => clearInterval(interval);
-  }, [key]);
-
-  return value;
+      return () => {
+        window.removeEventListener("openai:set_globals", handleSetGlobals);
+        clearInterval(pollInterval);
+      };
+    },
+    // Get snapshot function
+    () => window.openai?.[key],
+    // Get server snapshot (for SSR, not used in widgets)
+    () => undefined
+  );
 }
 
 /**
  * Get structured input passed to the tool
+ * This is the args object that was passed when the tool was invoked
  */
 export function useToolInput<T>(): T | undefined {
   return useOpenAiGlobal("toolInput") as T | undefined;
@@ -72,9 +94,20 @@ export function useToolInput<T>(): T | undefined {
 
 /**
  * Get structured output from the tool (for widget hydration)
+ * This is the structuredContent field from the tool response
+ * NOTE: The model also sees this data, so keep it concise
  */
 export function useToolOutput<T>(): T | undefined {
   return useOpenAiGlobal("toolOutput") as T | undefined;
+}
+
+/**
+ * Get private metadata from the tool response
+ * This is the _meta field from the tool response - only the widget sees this
+ * Use for hydration data that shouldn't be in the conversation transcript
+ */
+export function useToolResponseMetadata<T>(): T | undefined {
+  return useOpenAiGlobal("toolResponseMetadata") as T | undefined;
 }
 
 /**

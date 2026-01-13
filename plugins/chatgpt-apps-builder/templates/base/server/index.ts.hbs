@@ -55,20 +55,18 @@ const NODE_ENV = process.env.NODE_ENV || "development";
 const WIDGET_DOMAIN = process.env.WIDGET_DOMAIN || "{{kebabCase appName}}-widgets";
 const WIDGET_CSP_CONNECT = process.env.WIDGET_CSP_CONNECT || "";
 
-// Build CSP string for widgets
-function buildWidgetCSP(): string {
-  const connectSrc = ["'self'"];
+// Build CSP object for widgets
+// Uses the correct format: { script_domains, connect_domains, resource_domains, frame_domains }
+// See: https://developers.openai.com/apps-sdk/reference
+function buildWidgetCSP(): { script_domains: string[]; connect_domains: string[] } {
+  const connectDomains = [WIDGET_DOMAIN];
   if (WIDGET_CSP_CONNECT) {
-    connectSrc.push(...WIDGET_CSP_CONNECT.split(",").map(d => d.trim()));
+    connectDomains.push(...WIDGET_CSP_CONNECT.split(",").map(d => d.trim()));
   }
-  return JSON.stringify({
-    "default-src": ["'self'"],
-    "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-    "style-src": ["'self'", "'unsafe-inline'"],
-    "img-src": ["'self'", "data:", "https:"],
-    "connect-src": connectSrc,
-    "font-src": ["'self'", "data:"],
-  });
+  return {
+    script_domains: ["https://esm.sh", "https://cdn.jsdelivr.net"],
+    connect_domains: connectDomains,
+  };
 }
 const widgetCSP = buildWidgetCSP();
 
@@ -119,6 +117,10 @@ const server = new Server(
 // =============================================================================
 // Tool Definitions
 // =============================================================================
+// Each tool includes metadata required for ChatGPT Apps SDK:
+// - annotations: Hints for ChatGPT about tool behavior
+// - _meta: OpenAI-specific metadata for UI and widgets
+// See: https://developers.openai.com/apps-sdk/guides/optimize-metadata
 const TOOLS = [
 {{#each tools}}
   {
@@ -134,11 +136,27 @@ const TOOLS = [
     _meta: {
       "openai/toolInvocation/invoking": "{{invokingText}}",
       "openai/toolInvocation/invoked": "{{invokedText}}",
-      {{#if widgetRef}}"openai/outputTemplate": "ui://widget/{{widgetRef}}.html",{{/if}}
+      {{#if widgetRef}}
+      "openai/outputTemplate": "ui://widget/{{widgetRef}}.html",
+      "openai/widgetAccessible": true,
+      "openai/resultCanProduceWidget": true,
+      {{/if}}
     },
   },
 {{/each}}
 ];
+
+// Map tool names to their widget info for response metadata
+const TOOL_WIDGET_MAP: Record<string, { templateUri: string; invoked: string }> = {
+{{#each tools}}
+{{#if widgetRef}}
+  "{{name}}": {
+    templateUri: "ui://widget/{{widgetRef}}.html",
+    invoked: "{{invokedText}}",
+  },
+{{/if}}
+{{/each}}
+};
 
 // =============================================================================
 // Resource Definitions (Widgets)
@@ -183,14 +201,35 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   console.log(`Tool call: ${name}`, { userSubject });
 
   try {
+    let result: {
+      content: Array<{ type: string; text: string }>;
+      structuredContent?: unknown;
+    };
+
     switch (name) {
 {{#each tools}}
       case "{{name}}":
-        return {{camelCase name}}Handler(args, userSubject, meta);
+        result = await {{camelCase name}}Handler(args, userSubject, meta);
+        break;
 {{/each}}
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
+
+    // Add _meta with widget info to response if this tool has a widget
+    // This is REQUIRED for ChatGPT to render the widget properly
+    const widgetInfo = TOOL_WIDGET_MAP[name];
+    if (widgetInfo) {
+      return {
+        ...result,
+        _meta: {
+          "openai/outputTemplate": widgetInfo.templateUri,
+          "openai/toolInvocation/invoked": widgetInfo.invoked,
+        },
+      };
+    }
+
+    return result;
   } catch (error) {
     console.error(`Tool error (${name}):`, error);
     return {

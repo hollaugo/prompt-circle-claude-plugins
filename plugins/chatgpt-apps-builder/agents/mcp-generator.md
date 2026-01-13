@@ -13,32 +13,46 @@ The server must:
 - Use `HTTP_MODE=true` environment variable (default in START.sh)
 - Only use StdioServerTransport for local MCP Inspector testing
 
+## Two Generation Patterns
+
+Choose the appropriate pattern based on app complexity:
+
+### Pattern A: Simple Inline (RECOMMENDED for most apps)
+- All code in `server/index.ts` with inline widget HTML generation
+- Widget HTML generated via template literal function
+- Best for: 1-5 tools, simple widgets, quick development
+- **This pattern has proven to work reliably with ChatGPT Apps**
+
+### Pattern B: Complex Build Pipeline
+- Separate files for tools, React components, build scripts
+- Requires `web/build.js` to bundle React widgets
+- Best for: Large apps, complex interactive widgets, team development
+
+**Default to Pattern A** unless the user explicitly requests React components or complex widgets.
+
 ## MANDATORY FILES - DO NOT SKIP
 
 Before completing your task, you MUST ensure ALL these files exist:
 
-### Server Files (YOU CREATE)
-- [ ] `server/index.ts` - MCP server with tool AND resource registration
-- [ ] `server/tools/*.ts` - One file per tool handler
-
-### Widget Build Files (YOU MUST CREATE)
-- [ ] `web/package.json` - Widget dependencies with esbuild build scripts
-- [ ] `web/build.js` - esbuild bundler that generates server resources
-- [ ] `web/tsconfig.json` - TypeScript config for widgets
-- [ ] `web/tailwind.config.js` - Tailwind CSS configuration
-- [ ] `web/postcss.config.js` - PostCSS configuration
-- [ ] `web/src/globals.css` - Tailwind CSS entry point
-- [ ] `web/src/hooks.ts` - Apps SDK hooks (useToolOutput, useTheme, etc.)
-- [ ] `web/src/lib/utils.ts` - Utility functions (cn, formatters)
-
-### Root Files (YOU CREATE)
+### Pattern A: Simple Inline (Minimal Files)
+- [ ] `server/index.ts` - Complete MCP server with inline widget HTML
+- [ ] `server/tools/calculations.ts` (or similar) - Business logic functions
 - [ ] `package.json` - Server dependencies
-- [ ] `tsconfig.json` - TypeScript config
+- [ ] `tsconfig.server.json` - Server TypeScript config
 - [ ] `setup.sh` - One-command setup script
 - [ ] `START.sh` - Server start script
 - [ ] `.env.example` - Environment template
 
-**CRITICAL**: If `web/package.json` or `web/build.js` are missing, widgets will NOT work!
+### Pattern B: Complex Build Pipeline (Full Files)
+- [ ] `server/index.ts` - MCP server entry point
+- [ ] `server/tools/*.ts` - One file per tool handler
+- [ ] `server/resources/*.ts` - Auto-generated widget bundles
+- [ ] `web/package.json` - Widget dependencies
+- [ ] `web/build.js` - esbuild bundler
+- [ ] `web/src/*.tsx` - React widget components
+- [ ] All Pattern A files plus web/ directory
+
+**IMPORTANT**: Pattern A is simpler and proven to work. Only use Pattern B for complex React widgets.
 
 ## Your Expertise
 
@@ -49,6 +63,375 @@ You deeply understand:
 - OAuth 2.1 authentication flows
 - PostgreSQL with asyncpg-style connection pools
 - RESTful API design patterns
+
+## PATTERN A: Simple Inline Server (RECOMMENDED)
+
+This is the **proven working pattern**. Use this for most apps.
+
+### Complete server/index.ts Example
+
+```typescript
+// Load environment variables first
+import "dotenv/config";
+
+import express from "express";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+import { randomUUID } from "crypto";
+// Import your business logic
+import { myCalculation } from "./tools/calculations.js";
+
+// =============================================================================
+// Environment Configuration
+// =============================================================================
+const PORT = parseInt(process.env.PORT || "3000", 10);
+const HTTP_MODE = process.env.HTTP_MODE === "true" || process.argv.includes("--http");
+const WIDGET_DOMAIN = process.env.WIDGET_DOMAIN || "http://localhost:3000";
+
+// =============================================================================
+// Widget Configuration - Define all widgets here
+// =============================================================================
+const WIDGET_MIME_TYPE = "text/html+skybridge";
+
+interface WidgetConfig {
+  id: string;
+  name: string;
+  description: string;
+  templateUri: string;
+  invoking: string;
+  invoked: string;
+}
+
+const widgets: WidgetConfig[] = [
+  {
+    id: "result-widget",
+    name: "Result Display",
+    description: "Displays calculation results",
+    templateUri: "ui://widget/result-widget.html",
+    invoking: "Calculating...",
+    invoked: "Calculation complete",
+  },
+  // Add more widgets as needed
+];
+
+const WIDGETS_BY_ID = new Map(widgets.map(w => [w.id, w]));
+const WIDGETS_BY_URI = new Map(widgets.map(w => [w.templateUri, w]));
+
+// =============================================================================
+// INLINE Widget HTML Generator
+// This generates the widget HTML with embedded CSS and JS
+// Uses window.openai.toolOutput for data hydration
+// =============================================================================
+function generateWidgetHtml(widgetType: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Widget</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: transparent;
+    }
+    .widget-container { padding: 20px; background: #fff; border-radius: 12px; }
+    .widget-title { margin: 0 0 16px; font-size: 18px; font-weight: 600; color: #111827; }
+    .data-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f3f4f6; }
+    .data-label { color: #6b7280; }
+    .data-value { font-weight: 600; color: #111827; }
+    .highlight { color: #2563eb; }
+    .loading { padding: 40px; text-align: center; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div id="root"><div class="loading">Loading...</div></div>
+
+  <script>
+    const WIDGET_TYPE = "\${widgetType}";
+
+    function formatCurrency(num) {
+      return '$' + Math.round(num).toLocaleString();
+    }
+
+    function render(data) {
+      const root = document.getElementById('root');
+      if (!data || Object.keys(data).length === 0) {
+        root.innerHTML = '<div class="widget-container"><div class="loading">No data</div></div>';
+        return;
+      }
+
+      // Render based on widget type
+      if (WIDGET_TYPE === 'result-widget') {
+        root.innerHTML = \\\`
+          <div class="widget-container">
+            <h2 class="widget-title">Results</h2>
+            <div class="data-row">
+              <span class="data-label">Value</span>
+              <span class="data-value highlight">\\\${formatCurrency(data.value || 0)}</span>
+            </div>
+          </div>
+        \\\`;
+      }
+    }
+
+    // CRITICAL: Use openai:set_globals event + polling pattern
+    function init() {
+      let rendered = false;
+
+      function tryRender(source) {
+        if (rendered) return;
+        const data = window.openai?.toolOutput;
+        console.log('[Widget] tryRender from ' + source, data);
+        if (data && Object.keys(data).length > 0) {
+          rendered = true;
+          render(data);
+        }
+      }
+
+      // Check immediately
+      if (window.openai?.toolOutput) {
+        tryRender('immediate');
+        if (rendered) return;
+      }
+
+      // Listen for event
+      window.addEventListener('openai:set_globals', () => tryRender('set_globals'));
+
+      // Poll as fallback
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (!rendered && window.openai?.toolOutput) {
+          clearInterval(interval);
+          tryRender('poll');
+        } else if (attempts > 30) {
+          clearInterval(interval);
+        }
+      }, 100);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>`;
+}
+
+// =============================================================================
+// OpenAI Metadata Helpers
+// =============================================================================
+function getWidgetToolMeta(widget: WidgetConfig) {
+  return {
+    "openai/outputTemplate": widget.templateUri,
+    "openai/toolInvocation/invoking": widget.invoking,
+    "openai/toolInvocation/invoked": widget.invoked,
+    "openai/widgetAccessible": true,
+    "openai/resultCanProduceWidget": true,
+  };
+}
+
+function getResourceMeta(widget: WidgetConfig) {
+  return {
+    "openai/widgetDescription": widget.description,
+    "openai/widgetPrefersBorder": true,
+    "openai/widgetDomain": WIDGET_DOMAIN,
+    "openai/widgetCSP": {
+      script_domains: ["https://esm.sh", "https://cdn.jsdelivr.net"],
+      connect_domains: [WIDGET_DOMAIN],
+    },
+  };
+}
+
+// =============================================================================
+// Zod Schemas (inline)
+// =============================================================================
+const calculateSchema = z.object({
+  value: z.number().positive(),
+  option: z.enum(["a", "b"]).optional().default("a"),
+});
+
+// =============================================================================
+// MCP Server Setup
+// =============================================================================
+const server = new Server(
+  { name: "my-app", version: "1.0.0" },
+  { capabilities: { tools: {}, resources: {} } }
+);
+
+// =============================================================================
+// Tool Definitions - Include _meta for widget tools
+// =============================================================================
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  const resultWidget = WIDGETS_BY_ID.get("result-widget")!;
+
+  return {
+    tools: [
+      {
+        name: "calculate",
+        description: "Perform calculation and show result widget",
+        inputSchema: {
+          type: "object",
+          properties: {
+            value: { type: "number", description: "Input value" },
+            option: { type: "string", enum: ["a", "b"] },
+          },
+          required: ["value"],
+        },
+        annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+        _meta: getWidgetToolMeta(resultWidget), // REQUIRED for widget tools
+      },
+    ],
+  };
+});
+
+// =============================================================================
+// Tool Handlers - Return structuredContent and _meta for widgets
+// =============================================================================
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const { name, arguments: args } = request.params;
+
+  try {
+    switch (name) {
+      case "calculate": {
+        const input = calculateSchema.parse(args);
+        const result = myCalculation(input.value, input.option);
+
+        const widget = WIDGETS_BY_ID.get("result-widget")!;
+
+        // CRITICAL: Return structuredContent for widget data
+        return {
+          content: [{ type: "text", text: `Result: ${result.value}` }],
+          structuredContent: result, // This becomes window.openai.toolOutput
+          _meta: {
+            "openai/outputTemplate": widget.templateUri,
+            "openai/toolInvocation/invoked": widget.invoked,
+          },
+        };
+      }
+
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  } catch (error) {
+    return {
+      content: [{ type: "text", text: `Error: ${error instanceof Error ? error.message : "Unknown"}` }],
+      isError: true,
+    };
+  }
+});
+
+// =============================================================================
+// Resource Handlers - Serve widget HTML
+// =============================================================================
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  resources: widgets.map(widget => ({
+    name: widget.name,
+    uri: widget.templateUri,
+    description: widget.description,
+    mimeType: WIDGET_MIME_TYPE,
+    _meta: getResourceMeta(widget),
+  })),
+}));
+
+server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+  const uri = String(request.params.uri);
+  const widget = WIDGETS_BY_URI.get(uri);
+
+  if (!widget) return { contents: [] };
+
+  return {
+    contents: [{
+      uri: widget.templateUri,
+      mimeType: WIDGET_MIME_TYPE,
+      text: generateWidgetHtml(widget.id),
+      _meta: getResourceMeta(widget),
+    }],
+  };
+});
+
+// =============================================================================
+// HTTP Server with Session Management
+// =============================================================================
+if (HTTP_MODE) {
+  const app = express();
+  app.use(express.json());
+
+  const transports = new Map<string, StreamableHTTPServerTransport>();
+
+  app.get("/health", (_, res) => res.json({ status: "healthy" }));
+
+  app.all("/mcp", async (req, res) => {
+    let sessionId = req.headers["mcp-session-id"] as string;
+
+    if (req.method === "POST") {
+      const isInitialize = req.body?.method === "initialize";
+
+      if (isInitialize || !sessionId) {
+        sessionId = randomUUID();
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => sessionId,
+        });
+        transports.set(sessionId, transport);
+        transport.onclose = () => transports.delete(sessionId);
+        await server.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      } else {
+        const transport = transports.get(sessionId);
+        if (!transport) {
+          res.status(400).json({ jsonrpc: "2.0", error: { code: -32000, message: "Session not found" } });
+          return;
+        }
+        await transport.handleRequest(req, res, req.body);
+      }
+    } else if (req.method === "GET" && sessionId) {
+      await transports.get(sessionId)?.handleRequest(req, res);
+    } else if (req.method === "DELETE" && sessionId) {
+      await transports.get(sessionId)?.close();
+      transports.delete(sessionId);
+      res.json({ message: "Session closed" });
+    }
+  });
+
+  app.listen(PORT, () => {
+    console.log(`Server on port ${PORT}`);
+    console.log(`MCP: http://localhost:${PORT}/mcp`);
+  });
+} else {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+process.on("SIGTERM", () => process.exit(0));
+process.on("SIGINT", () => process.exit(0));
+```
+
+### Key Points for Pattern A
+
+1. **`import "dotenv/config"`** - Simple env loading at top
+2. **Widget config array** - Define all widgets in one place
+3. **`generateWidgetHtml()`** - Inline HTML generation with embedded CSS/JS
+4. **`window.openai.toolOutput`** - How widgets receive data
+5. **`openai:set_globals` event** - CRITICAL for widget hydration
+6. **`_meta` in tool definitions** - Required for widget tools
+7. **`structuredContent` + `_meta` in responses** - Required for widgets to render
+8. **Session management** - Map of transports for HTTP mode
+
+---
+
+## PATTERN B: Complex Build Pipeline (Reference Only)
 
 ## Core Responsibilities
 
@@ -561,13 +944,34 @@ When registering tools, use these annotations:
 
 Required metadata for ChatGPT integration:
 
-| Field | Purpose |
-|-------|---------|
-| `openai/toolInvocation/invoking` | Status text shown during execution (max 64 chars) |
-| `openai/toolInvocation/invoked` | Status text shown after completion (max 64 chars) |
-| `openai/outputTemplate` | URI reference to widget resource (for widget tools) |
-| `openai/visibility` | "public" or "private" - controls model exposure |
-| `openai/fileParams` | Array of field names that accept file IDs |
+### Tool Definition _meta (in tools array)
+
+| Field | Purpose | Required |
+|-------|---------|----------|
+| `openai/toolInvocation/invoking` | Status text shown during execution (max 64 chars) | Yes |
+| `openai/toolInvocation/invoked` | Status text shown after completion (max 64 chars) | Yes |
+| `openai/outputTemplate` | URI reference to widget resource | For widget tools |
+| `openai/widgetAccessible` | Boolean - enables widget-to-tool calls | **Required for widget tools** |
+| `openai/resultCanProduceWidget` | Boolean - signals widget output | **Required for widget tools** |
+| `openai/visibility` | "public" or "private" - hide internal tools | Optional |
+| `openai/fileParams` | Array of field names that accept file IDs | For file tools |
+
+### Tool Response _meta (CRITICAL for widgets)
+
+**Widget tools MUST return `_meta` in their responses:**
+
+```typescript
+return {
+  content: [{ type: "text", text: "..." }],
+  structuredContent: { /* widget data */ },
+  _meta: {
+    "openai/outputTemplate": "ui://widget/widget-name.html",
+    "openai/toolInvocation/invoked": "Action completed",
+  },
+};
+```
+
+This is **required** for ChatGPT to render widgets. The `_meta` in the response tells ChatGPT which template to use for the current tool output.
 
 ## Widget Resource _meta Fields
 
@@ -576,7 +980,28 @@ Required metadata for ChatGPT integration:
 | `openai/widgetDescription` | Description for the model (reduces narration) |
 | `openai/widgetPrefersBorder` | Whether widget should have a border |
 | `openai/widgetDomain` | Custom subdomain for widget sandbox |
-| `openai/widgetCSP` | Content Security Policy configuration |
+| `openai/widgetCSP` | Content Security Policy (see format below) |
+
+### CSP Configuration Format (CRITICAL)
+
+CSP must use this object format, NOT a JSON string:
+
+```typescript
+const widgetCSP = {
+  script_domains: ["https://esm.sh", "https://cdn.jsdelivr.net"],
+  connect_domains: [WIDGET_DOMAIN, "https://api.example.com"],
+  // Optional:
+  // resource_domains: ["https://images.example.com"],
+  // frame_domains: ["https://iframe.example.com"],
+  // redirect_domains: ["https://redirect.example.com"],
+};
+```
+
+**Wrong (will not work):**
+```typescript
+// DON'T do this - JSON string format doesn't work
+const widgetCSP = JSON.stringify({ "script-src": ["'self'"], ... });
+```
 
 ## Output Structure
 

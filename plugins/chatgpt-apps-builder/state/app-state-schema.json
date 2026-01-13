@@ -101,20 +101,40 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "Tool identifier (kebab-case)"
+            "description": "Tool identifier (snake_case preferred, e.g., create_task)"
           },
-          "description": { "type": "string" },
+          "description": {
+            "type": "string",
+            "description": "Start with 'Use this when...' and state limitations"
+          },
           "type": {
             "type": "string",
             "enum": ["query", "mutation", "destructive", "widget", "external"]
           },
           "annotations": {
             "type": "object",
+            "description": "MCP tool annotations that affect ChatGPT prompting behavior",
             "properties": {
-              "readOnlyHint": { "type": "boolean" },
-              "destructiveHint": { "type": "boolean" },
-              "openWorldHint": { "type": "boolean" },
-              "idempotentHint": { "type": "boolean" }
+              "readOnlyHint": { "type": "boolean", "description": "true for query tools - skips confirmation" },
+              "destructiveHint": { "type": "boolean", "description": "true for delete operations - requires confirmation" },
+              "openWorldHint": { "type": "boolean", "description": "true for external API calls" },
+              "idempotentHint": { "type": "boolean", "description": "true if repeated calls have no additional effect" }
+            }
+          },
+          "openaiMeta": {
+            "type": "object",
+            "description": "OpenAI-specific metadata for ChatGPT Apps SDK",
+            "properties": {
+              "invoking": { "type": "string", "maxLength": 64, "description": "Status text during execution" },
+              "invoked": { "type": "string", "maxLength": 64, "description": "Status text after completion" },
+              "widgetAccessible": { "type": "boolean", "description": "Required true for widget tools" },
+              "resultCanProduceWidget": { "type": "boolean", "description": "Required true for widget tools" },
+              "visibility": { "type": "string", "enum": ["public", "private"], "description": "Hide internal/helper tools" },
+              "fileParams": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Parameter names that accept file IDs"
+              }
             }
           },
           "inputSchema": {
@@ -123,7 +143,7 @@
           },
           "outputSchema": {
             "type": "object",
-            "description": "JSON Schema for structured output"
+            "description": "JSON Schema for structured output (structuredContent)"
           },
           "widgetRef": {
             "type": "string",
@@ -151,14 +171,18 @@
             "type": "string",
             "description": "Widget identifier (kebab-case)"
           },
-          "description": { "type": "string" },
+          "description": {
+            "type": "string",
+            "description": "Model-visible description to reduce redundant narration"
+          },
           "pattern": {
             "type": "string",
             "enum": ["list", "detail", "form", "carousel", "fullscreen", "custom"]
           },
           "displayMode": {
             "type": "string",
-            "enum": ["inline", "fullscreen", "pip"]
+            "enum": ["inline", "fullscreen", "pip"],
+            "default": "inline"
           },
           "toolRef": {
             "type": "string",
@@ -166,7 +190,27 @@
           },
           "dataShape": {
             "type": "object",
-            "description": "TypeScript interface shape for widget data"
+            "description": "TypeScript interface shape for widget data (structuredContent)"
+          },
+          "openaiMeta": {
+            "type": "object",
+            "description": "OpenAI-specific widget metadata",
+            "properties": {
+              "widgetDescription": { "type": "string", "description": "Model-visible summary" },
+              "widgetPrefersBorder": { "type": "boolean", "default": true },
+              "widgetDomain": { "type": "string", "description": "Custom subdomain for sandbox" },
+              "widgetCSP": {
+                "type": "object",
+                "description": "Content Security Policy configuration",
+                "properties": {
+                  "script_domains": { "type": "array", "items": { "type": "string" } },
+                  "connect_domains": { "type": "array", "items": { "type": "string" } },
+                  "resource_domains": { "type": "array", "items": { "type": "string" } },
+                  "frame_domains": { "type": "array", "items": { "type": "string" } },
+                  "redirect_domains": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
           },
           "status": {
             "type": "string",
@@ -248,19 +292,47 @@
 
     "goldenPrompts": {
       "type": "object",
+      "description": "Test prompts for validating ChatGPT tool invocation. See: https://developers.openai.com/apps-sdk/guides/optimize-metadata",
       "properties": {
         "generated": { "type": "boolean", "default": false },
-        "direct": {
-          "type": "array",
-          "items": { "type": "string" }
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "byTool": {
+          "type": "object",
+          "description": "Prompts organized by tool name",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "direct": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Prompts that explicitly name the action"
+              },
+              "indirect": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Prompts describing goals without naming the tool"
+              },
+              "negative": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Prompts that should NOT trigger the tool"
+              },
+              "edgeCases": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Boundary conditions and error cases"
+              }
+            }
+          }
         },
-        "indirect": {
-          "type": "array",
-          "items": { "type": "string" }
-        },
-        "negative": {
-          "type": "array",
-          "items": { "type": "string" }
+        "totals": {
+          "type": "object",
+          "properties": {
+            "direct": { "type": "integer" },
+            "indirect": { "type": "integer" },
+            "negative": { "type": "integer" },
+            "edgeCases": { "type": "integer" }
+          }
         }
       }
     },
