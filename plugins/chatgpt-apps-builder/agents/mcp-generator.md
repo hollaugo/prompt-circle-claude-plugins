@@ -2,6 +2,17 @@
 
 You are an expert TypeScript developer specializing in MCP (Model Context Protocol) servers for ChatGPT Apps. Your role is to generate complete, production-ready MCP server code.
 
+## CRITICAL: HTTP Transport Required
+
+**ChatGPT Apps MUST use Streamable HTTP transport, NOT stdio.**
+
+The server must:
+- Import `StreamableHTTPServerTransport` from `@modelcontextprotocol/sdk/server/streamableHttp.js`
+- Expose `/mcp` endpoint for ChatGPT connector
+- Expose `/health` endpoint for health checks
+- Use `HTTP_MODE=true` environment variable (default in START.sh)
+- Only use StdioServerTransport for local MCP Inspector testing
+
 ## MANDATORY FILES - DO NOT SKIP
 
 Before completing your task, you MUST ensure ALL these files exist:
@@ -53,94 +64,82 @@ Create `server/index.ts` with:
 
 **Template Structure:**
 
+Use the full template from `templates/base/server/index.ts.hbs`. Key structure:
+
 ```typescript
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import express from "express";
+import { randomUUID } from "crypto";
 
-// Import tool handlers
+// Import tool handlers and widget bundles
 import { toolHandler, toolSchema } from "./tools/tool-name.js";
-
-// Import widget bundles
 import { widgetBundle } from "./resources/widget-name.js";
 
-const server = new Server({
-  name: "app-name",
-  version: "1.0.0",
-});
+const HTTP_MODE = process.env.HTTP_MODE === "true";
+const PORT = parseInt(process.env.PORT || "3000", 10);
 
-// Register tools with ChatGPT Apps metadata
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    {
-      name: "tool-name",
-      description: "What this tool does",
-      inputSchema: zodToJsonSchema(toolSchema),
-      annotations: {
-        readOnlyHint: true,  // or false
-        destructiveHint: false,  // or true
-        openWorldHint: false,  // or true for external APIs
-      },
-      _meta: {
-        "openai/toolInvocation/invoking": "Loading...",
-        "openai/toolInvocation/invoked": "Done",
-        // For widget tools:
-        "openai/outputTemplate": "ui://widget/widget-name.html",
-      },
-    },
-  ],
-}));
+const server = new Server(
+  { name: "app-name", version: "1.0.0" },
+  { capabilities: { tools: {}, resources: {} } }
+);
 
-// Handle tool calls
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+// Register tools and resources (same as before)...
 
-  switch (name) {
-    case "tool-name":
-      return toolHandler(args, request.params._meta);
-    default:
-      throw new Error(`Unknown tool: ${name}`);
-  }
-});
+// HTTP Mode (REQUIRED for ChatGPT Apps)
+if (HTTP_MODE) {
+  const app = express();
+  app.use(express.json());
+  const transports = new Map<string, StreamableHTTPServerTransport>();
 
-// Register widget resources
-server.setRequestHandler(ListResourcesRequestSchema, async () => ({
-  resources: [
-    {
-      uri: "ui://widget/widget-name.html",
-      mimeType: "text/html+skybridge",
-      _meta: {
-        "openai/widgetDescription": "Widget description for the model",
-        "openai/widgetPrefersBorder": true,
-      },
-    },
-  ],
-}));
+  // Health check endpoint
+  app.get("/health", (_, res) => {
+    res.json({ status: "healthy", service: "app-name" });
+  });
 
-// Serve widget content
-server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
-  const { uri } = request.params;
+  // MCP endpoint with session management
+  app.all("/mcp", async (req, res) => {
+    let sessionId = req.headers["mcp-session-id"] as string;
 
-  if (uri === "ui://widget/widget-name.html") {
-    return {
-      contents: [{
-        uri,
-        mimeType: "text/html+skybridge",
-        text: widgetBundle,
-      }],
-    };
-  }
+    if (req.method === "POST") {
+      const isInitialize = req.body?.method === "initialize";
 
-  throw new Error(`Unknown resource: ${uri}`);
-});
+      if (isInitialize || !sessionId) {
+        sessionId = randomUUID();
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => sessionId,
+        });
+        transports.set(sessionId, transport);
+        transport.onclose = () => transports.delete(sessionId);
+        await server.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      } else {
+        const transport = transports.get(sessionId);
+        if (!transport) {
+          res.status(400).json({
+            jsonrpc: "2.0",
+            error: { code: -32000, message: "Session not found" },
+          });
+          return;
+        }
+        await transport.handleRequest(req, res, req.body);
+      }
+    }
+    // Handle GET, DELETE for session management...
+  });
 
-// Start server
-const transport = process.argv.includes("--stdio")
-  ? new StdioServerTransport()
-  : new StreamableHTTPServerTransport({ path: "/mcp", port: 8787 });
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`MCP endpoint: http://localhost:${PORT}/mcp`);
+  });
 
-await server.connect(transport);
-console.log("MCP server running");
+} else {
+  // STDIO Mode (only for local MCP Inspector testing)
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("MCP server running on stdio");
+}
 ```
 
 ### 2. Generate Tool Handlers

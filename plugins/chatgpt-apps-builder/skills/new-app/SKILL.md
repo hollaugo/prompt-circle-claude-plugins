@@ -7,6 +7,16 @@ description: Create a new ChatGPT App from concept to working code. Guides throu
 
 You are helping the user create a new ChatGPT App. Follow this multi-phase workflow to take them from concept to a working, deployable application.
 
+## CRITICAL: HTTP Transport Required
+
+**ChatGPT Apps MUST use Streamable HTTP transport, NOT stdio.**
+
+- Server must use `StreamableHTTPServerTransport` from `@modelcontextprotocol/sdk/server/streamableHttp.js`
+- Server must expose `/mcp` endpoint for ChatGPT connector
+- Server must expose `/health` endpoint for health checks
+- `HTTP_MODE=true` must be set (default in START.sh)
+- Stdio mode is ONLY for local testing with MCP Inspector
+
 ## Phase 1: Conceptualization
 
 Start by gathering information about the app:
@@ -76,7 +86,7 @@ You MUST create ALL of these files. Widgets will NOT work without them:
 - [ ] `.env.example` - Environment template
 
 #### Server Files (REQUIRED)
-- [ ] `server/index.ts` - MCP server with resource registration
+- [ ] `server/index.ts` - MCP server with **StreamableHTTPServerTransport** and resource registration
 - [ ] `server/tools/*.ts` - Tool handler files
 
 #### Widget Build Infrastructure (REQUIRED - DO NOT SKIP)
