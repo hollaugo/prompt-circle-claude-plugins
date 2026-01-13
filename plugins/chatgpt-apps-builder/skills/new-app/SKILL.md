@@ -7,30 +7,33 @@ description: Create a new ChatGPT App from concept to working code. Guides throu
 
 You are helping the user create a new ChatGPT App. Follow this multi-phase workflow to take them from concept to a working, deployable application.
 
-## CRITICAL: HTTP Transport Required
+## CRITICAL REQUIREMENTS
 
-**ChatGPT Apps MUST use Streamable HTTP transport, NOT stdio.**
+**ChatGPT Apps MUST use:**
+- `Server` class from `@modelcontextprotocol/sdk/server/index.js` (NOT `McpServer`)
+- `StreamableHTTPServerTransport` from `@modelcontextprotocol/sdk/server/streamableHttp.js`
+- Session management with `Map<string, StreamableHTTPServerTransport>`
+- Widget URIs: `ui://widget/{widget-id}.html`
+- Widget MIME type: `text/html+skybridge`
+- `structuredContent` in tool responses for widget data
+- `_meta` with `openai/outputTemplate` on both tool definitions and responses
 
-- Server must use `StreamableHTTPServerTransport` from `@modelcontextprotocol/sdk/server/streamableHttp.js`
-- Server must expose `/mcp` endpoint for ChatGPT connector
-- Server must expose `/health` endpoint for health checks
-- `HTTP_MODE=true` must be set (default in START.sh)
-- Stdio mode is ONLY for local testing with MCP Inspector
+## File Structure
 
-## Two Implementation Patterns
+Every ChatGPT App follows this structure:
 
-### Pattern A: Simple Inline (RECOMMENDED)
-- All code in `server/index.ts` with inline widget HTML
-- Widget HTML generated via template literal function
-- Best for: 1-5 tools, simple widgets, quick development
-- **This pattern is proven to work reliably with ChatGPT Apps**
-
-### Pattern B: Complex Build Pipeline
-- Separate files for tools, React components, build scripts
-- Requires `web/build.js` to bundle React widgets
-- Best for: Large apps with complex interactive widgets
-
-**Default to Pattern A** unless the user explicitly requests React components.
+```
+{app-name}/
+├── package.json              # Dependencies and scripts
+├── tsconfig.server.json      # TypeScript config
+├── setup.sh                  # One-command setup
+├── START.sh                  # Multi-mode server launcher
+├── .env                      # Environment variables (created by setup.sh)
+├── .env.example              # Environment template
+├── .gitignore                # Git ignores
+└── server/
+    └── index.ts              # Complete MCP server with inline widgets
+```
 
 ## Phase 1: Conceptualization
 
@@ -55,164 +58,503 @@ Start by gathering information about the app:
 4. **Define Use Cases**
    Create 3-5 primary use cases with user stories.
 
-5. **Create Value Proposition**
-   Document why this app adds value in ChatGPT.
-
 ## Phase 2: Design
 
 Design the technical architecture:
 
 1. **Tool Topology**
    Define the MCP tools needed:
-   - Query tools (readOnly: true)
-   - Mutation tools (destructive: false)
-   - Destructive tools (destructive: true)
-   - Widget tools (return UI)
-   - External API tools (openWorld: true)
+   - Query tools (readOnlyHint: true)
+   - Mutation tools (destructiveHint: false)
+   - Destructive tools (destructiveHint: true)
+   - Widget tools (return UI with _meta)
+   - External API tools (openWorldHint: true)
 
-2. **Widget Patterns**
-   Determine which widgets are needed:
-   - List, Detail, Form, Carousel, Fullscreen
+2. **Widget Design**
+   For each widget, define:
+   - `id` - unique identifier (kebab-case)
+   - `name` - display name
+   - `description` - what it shows
+   - `mockData` - sample data for preview
 
 3. **Data Model**
-   Design entities and relationships.
+   Design entities and their relationships.
 
 4. **Auth Requirements**
-   - Single-user (no auth, uses openai/subject)
+   - Single-user (no auth needed)
    - Multi-user (Auth0 or Supabase Auth)
-
-5. **Database Requirements**
-   - No database (stateless)
-   - Supabase PostgreSQL (persistent)
 
 ## Phase 3: Implementation
 
-Generate the complete application code using **Pattern A** (simple inline) by default.
+Generate the complete application code.
 
-### PATTERN A FILES (Default - Recommended)
+### package.json
 
-Use templates from `templates/pattern-a/`:
-
-```
-{app-name}/
-├── package.json              # Server dependencies (templates/pattern-a/package.json.hbs)
-├── tsconfig.server.json      # Server TypeScript config (templates/pattern-a/tsconfig.server.json.hbs)
-├── setup.sh                  # One-command setup (templates/pattern-a/setup.sh.hbs)
-├── START.sh                  # Server launcher (templates/pattern-a/START.sh.hbs)
-├── .env.example              # Environment template (templates/pattern-a/.env.example.hbs)
-├── .gitignore                # Git ignores (templates/pattern-a/.gitignore.hbs)
-└── server/
-    └── index.ts              # Complete MCP server with inline widgets (templates/pattern-a/server/index.ts.hbs)
-```
-
-### Pattern A Key Features
-
-1. **Widget Preview Endpoint**
-   - `GET /preview` - Lists all widgets with links to preview each
-   - `GET /preview/:widgetId` - Shows widget with mock data for local testing
-   - No need to connect to ChatGPT to test widgets
-
-2. **Verbose Development Logging**
-   - `npm run dev` uses `--clear-screen=false` to preserve logs
-   - All MCP requests logged with timestamps in development mode
-   - `NODE_ENV=development` enables debug output
-
-3. **Proper .env Handling**
-   - `setup.sh` creates `.env` with sensible defaults
-   - Won't overwrite existing `.env` without confirmation
-   - Creates `.env.local.example` for personal overrides
-
-4. **Multi-Mode Launcher**
-   - `./START.sh` - HTTP mode for ChatGPT
-   - `./START.sh --dev` - Development with hot reload + logs
-   - `./START.sh --preview` - Opens widget preview in browser
-   - `./START.sh --stdio` - For MCP Inspector testing
-
-### Pattern A Implementation Steps
-
-1. **Generate files from templates**
-   Use the Handlebars templates in `templates/pattern-a/` with these variables:
-   - `{{appName}}` - Display name (e.g., "My Calculator")
-   - `{{kebabCase appName}}` - Package name (e.g., "my-calculator")
-   - `{{appDescription}}` - Short description
-   - `{{widgets}}` - Array of widget configurations
-   - `{{tools}}` - Array of tool definitions
-
-2. **Widget Configuration**
-   Each widget needs:
-   ```javascript
-   {
-     id: "widget-id",
-     name: "Widget Name",
-     description: "What this widget displays",
-     templateUri: "ui://widget/widget-id.html",
-     invoking: "Loading...",
-     invoked: "Ready",
-     mockData: { /* sample data for preview */ }
-   }
-   ```
-
-3. **Tool-Widget Binding**
-   Tools that produce widgets need:
-   - `widgetId` property linking to widget config
-   - `_meta` in tool definition with `openai/outputTemplate`
-   - `structuredContent` in response (becomes `window.openai.toolOutput`)
-   - `_meta` in response with `openai/outputTemplate`
-
-4. **Make scripts executable and test**
-   ```bash
-   chmod +x setup.sh START.sh
-   ./setup.sh
-   ./START.sh --dev          # See verbose logs
-   open http://localhost:3000/preview   # Preview widgets
-   ```
-
-### PATTERN B FILES (Only if requested)
-
-Only use Pattern B if user explicitly requests React components or complex widgets.
-
-Additional files for Pattern B:
-```
-web/
-├── package.json          # Widget dependencies
-├── build.js              # esbuild bundler
-├── tsconfig.json         # Widget TypeScript config
-├── tailwind.config.js    # Tailwind config
-├── postcss.config.js     # PostCSS config
-├── vite.config.ts        # Dev server
-├── index.html            # Dev preview
-└── src/
-    ├── widgets/*.tsx     # React widget components
-    ├── components/ui/    # shadcn components
-    ├── hooks.ts          # Apps SDK hooks
-    ├── lib/utils.ts      # Utilities
-    └── globals.css       # Tailwind CSS
+```json
+{
+  "name": "{app-name}",
+  "version": "1.0.0",
+  "description": "{app-description}",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:server",
+    "build:server": "tsc -p tsconfig.server.json",
+    "start": "HTTP_MODE=true node dist/server/index.js",
+    "dev": "HTTP_MODE=true NODE_ENV=development tsx watch --clear-screen=false server/index.ts",
+    "validate": "tsc --noEmit -p tsconfig.server.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.18.2",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
 ```
 
-## Phase 4: Validation & Testing
+### tsconfig.server.json
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist/server",
+    "rootDir": "server",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "sourceMap": true
+  },
+  "include": ["server/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
+```
+
+### server/index.ts Structure
+
+The server MUST follow this structure:
+
+```typescript
+// 1. Load environment first
+import "dotenv/config";
+import express, { Request, Response } from "express";
+import { randomUUID } from "crypto";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+  JSONRPCMessage,
+} from "@modelcontextprotocol/sdk/types.js";
+
+// 2. Configuration
+const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || "development";
+const WIDGET_DOMAIN = process.env.WIDGET_DOMAIN || `http://localhost:${PORT}`;
+
+function log(...args: unknown[]) {
+  if (NODE_ENV === "development") {
+    console.log(`[${new Date().toISOString()}]`, ...args);
+  }
+}
+
+// 3. Widget Configuration Array
+interface WidgetConfig {
+  id: string;
+  name: string;
+  description: string;
+  templateUri: string;
+  invoking: string;
+  invoked: string;
+  mockData: Record<string, unknown>;
+}
+
+const widgets: WidgetConfig[] = [
+  {
+    id: "my-widget",
+    name: "My Widget",
+    description: "Displays data in a visual format",
+    templateUri: "ui://widget/my-widget.html",
+    invoking: "Loading...",
+    invoked: "Ready",
+    mockData: { /* sample data */ },
+  },
+];
+
+const WIDGETS_BY_ID = new Map(widgets.map((w) => [w.id, w]));
+const WIDGETS_BY_URI = new Map(widgets.map((w) => [w.templateUri, w]));
+
+// 4. Inline Widget HTML Generator
+function generateWidgetHtml(widgetId: string, previewData?: Record<string, unknown>): string {
+  const widget = WIDGETS_BY_ID.get(widgetId);
+  if (!widget) return `<html><body>Widget not found: ${widgetId}</body></html>`;
+
+  const previewScript = previewData
+    ? `<script>window.PREVIEW_DATA = ${JSON.stringify(previewData)};</script>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${widget.name}</title>
+  <style>/* CSS styles */</style>
+  ${previewScript}
+</head>
+<body>
+  <div id="root"><div class="loading">Loading...</div></div>
+  <script>
+    (function() {
+      let rendered = false;
+
+      function render(data) {
+        if (rendered || !data) return;
+        rendered = true;
+        // Widget rendering logic
+        document.getElementById('root').innerHTML = '...';
+      }
+
+      function tryRender() {
+        if (window.PREVIEW_DATA) { render(window.PREVIEW_DATA); return; }
+        if (window.openai?.toolOutput) { render(window.openai.toolOutput); }
+      }
+
+      // ChatGPT Apps SDK integration
+      window.addEventListener('openai:set_globals', tryRender);
+
+      // Polling fallback
+      const poll = setInterval(() => {
+        if (window.openai?.toolOutput || window.PREVIEW_DATA) {
+          tryRender();
+          clearInterval(poll);
+        }
+      }, 100);
+      setTimeout(() => clearInterval(poll), 10000);
+
+      tryRender();
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+// 5. Tool Definitions
+const tools = [
+  {
+    name: "my_tool",
+    description: "Does something useful",
+    inputSchema: {
+      type: "object" as const,
+      properties: { /* ... */ },
+      required: ["..."],
+    },
+    annotations: { title: "My Tool", readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    widgetId: "my-widget", // Links to widget config (optional)
+    execute: (args: any) => {
+      // Tool logic - return data that widget will display
+      return { /* result data */ };
+    },
+  },
+];
+
+// 6. MCP Server Factory
+function createServer(): Server {
+  const server = new Server(
+    { name: "{app-name}", version: "1.0.0" },
+    { capabilities: { tools: {}, resources: {} } }
+  );
+
+  // ListTools handler
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    log("ListTools request");
+    return {
+      tools: tools.map((tool) => {
+        const widget = tool.widgetId ? WIDGETS_BY_ID.get(tool.widgetId) : null;
+        return {
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+          annotations: tool.annotations,
+          ...(widget && {
+            _meta: {
+              "openai/outputTemplate": widget.templateUri,
+              "openai/widgetAccessible": true,
+              "openai/resultCanProduceWidget": true,
+              "openai/toolInvocation/invoking": widget.invoking,
+            },
+          }),
+        };
+      }),
+    };
+  });
+
+  // CallTool handler
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+    log(`CallTool: ${name}`, args);
+
+    const tool = tools.find((t) => t.name === name);
+    if (!tool) throw new Error(`Unknown tool: ${name}`);
+
+    try {
+      const result = tool.execute(args);
+      const widget = tool.widgetId ? WIDGETS_BY_ID.get(tool.widgetId) : null;
+
+      if (widget) {
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+          structuredContent: result,  // CRITICAL: This becomes window.openai.toolOutput
+          _meta: {
+            "openai/outputTemplate": widget.templateUri,
+            "openai/toolInvocation/invoked": widget.invoked,
+          },
+        };
+      }
+
+      return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : "Unknown"}` }],
+        isError: true,
+      };
+    }
+  });
+
+  // ListResources handler
+  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    return {
+      resources: widgets.map((w) => ({
+        uri: w.templateUri,
+        name: w.name,
+        description: w.description,
+        mimeType: "text/html+skybridge",
+      })),
+    };
+  });
+
+  // ReadResource handler
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const { uri } = request.params;
+    const widget = WIDGETS_BY_URI.get(uri);
+    if (!widget) throw new Error(`Unknown resource: ${uri}`);
+
+    return {
+      contents: [{ uri, mimeType: "text/html+skybridge", text: generateWidgetHtml(widget.id) }],
+      _meta: {
+        "openai/serialization": "markdown-encoded-html",
+        "openai/csp": { script_domains: ["'unsafe-inline'"], connect_domains: [WIDGET_DOMAIN] },
+      },
+    };
+  });
+
+  return server;
+}
+
+// 7. Express App with Session Management
+const app = express();
+app.use(express.json());
+
+const transports = new Map<string, StreamableHTTPServerTransport>();
+
+// Health endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", service: "{app-name}", widgets: widgets.length });
+});
+
+// Widget preview index
+app.get("/preview", (req, res) => {
+  res.send(`<!DOCTYPE html>
+    <html><head><title>Widget Preview</title></head>
+    <body>
+      <h1>Widget Preview</h1>
+      ${widgets.map(w => `<a href="/preview/${w.id}">${w.name}</a><br>`).join('')}
+    </body></html>`);
+});
+
+// Widget preview with mock data
+app.get("/preview/:widgetId", (req, res) => {
+  const widget = WIDGETS_BY_ID.get(req.params.widgetId);
+  if (!widget) { res.status(404).send("Widget not found"); return; }
+  res.setHeader("Content-Type", "text/html");
+  res.send(generateWidgetHtml(widget.id, widget.mockData));
+});
+
+// MCP endpoint with session management
+app.all("/mcp", async (req, res) => {
+  log("MCP request:", req.method, req.headers["mcp-session-id"] || "no-session");
+
+  let sessionId = req.headers["mcp-session-id"] as string | undefined;
+  let transport = sessionId ? transports.get(sessionId) : undefined;
+
+  const isInitialize = req.body?.method === "initialize" ||
+    (Array.isArray(req.body) && req.body.some((m: JSONRPCMessage) => "method" in m && m.method === "initialize"));
+
+  if (isInitialize || !sessionId || !transport) {
+    sessionId = randomUUID();
+    log(`New session: ${sessionId}`);
+
+    transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => sessionId!,
+      onsessioninitialized: (id) => log(`Session initialized: ${id}`),
+    });
+
+    transports.set(sessionId, transport);
+    const server = createServer();
+
+    res.on("close", () => log(`Connection closed: ${sessionId}`));
+    transport.onclose = () => { transports.delete(sessionId!); server.close(); };
+
+    await server.connect(transport);
+  }
+
+  await transport.handleRequest(req, res, req.body);
+});
+
+app.delete("/mcp", async (req, res) => {
+  const sessionId = req.headers["mcp-session-id"] as string | undefined;
+  if (sessionId && transports.has(sessionId)) {
+    await transports.get(sessionId)!.handleRequest(req, res, req.body);
+  } else {
+    res.status(404).json({ error: "Session not found" });
+  }
+});
+
+// 8. Start Server
+app.listen(PORT, () => {
+  console.log(`{App Name} MCP Server running on port ${PORT}`);
+  console.log(`  MCP:     http://localhost:${PORT}/mcp`);
+  console.log(`  Health:  http://localhost:${PORT}/health`);
+  console.log(`  Preview: http://localhost:${PORT}/preview`);
+});
+```
+
+### setup.sh
+
+```bash
+#!/bin/bash
+set -euo pipefail
+cd "$(dirname "$0")"
+
+echo "=== {App Name} Setup ==="
+
+# Check Node.js 18+
+NODE_VERSION=$(node -v | cut -d'v' -f2 | cut -d'.' -f1)
+if [ "$NODE_VERSION" -lt 18 ]; then
+  echo "Node.js 18+ required"; exit 1
+fi
+
+npm install
+npm run build:server
+
+if [ ! -f .env ]; then
+  cat > .env << 'EOF'
+PORT=3000
+HTTP_MODE=true
+NODE_ENV=development
+WIDGET_DOMAIN=http://localhost:3000
+EOF
+fi
+
+chmod +x START.sh
+echo "Setup complete! Run ./START.sh --dev"
+```
+
+### START.sh
+
+```bash
+#!/bin/bash
+set -euo pipefail
+cd "$(dirname "$0")"
+
+if [ -f .env ]; then set -a; source .env; set +a; fi
+
+case "${1:-}" in
+  --dev)
+    echo "Dev mode: http://localhost:${PORT:-3000}/preview"
+    npm run dev
+    ;;
+  --preview)
+    npm run dev &
+    sleep 2
+    open "http://localhost:${PORT:-3000}/preview"
+    wait
+    ;;
+  --stdio)
+    HTTP_MODE=false node dist/server/index.js
+    ;;
+  *)
+    [ ! -f dist/server/index.js ] && npm run build:server
+    HTTP_MODE=true node dist/server/index.js
+    ;;
+esac
+```
+
+## Phase 4: Testing
 
 Before deployment:
-1. Test server starts without errors: `./START.sh`
-2. Test health endpoint: `curl http://localhost:3000/health`
-3. Test MCP endpoint initialization
-4. Run golden prompt tests
+
+1. **Run setup**: `./setup.sh`
+2. **Start dev mode**: `./START.sh --dev`
+3. **Preview widgets**: Open `http://localhost:3000/preview`
+4. **Test health**: `curl http://localhost:3000/health`
+5. **Test MCP**: Connect via MCP Inspector or ChatGPT
 
 ## Phase 5: Deployment
 
 Deploy to Render:
-1. Generate `render.yaml` and `Dockerfile`
-2. Deploy via Render
-3. Configure environment variables
-4. Verify `/mcp` endpoint works
-5. Provide ChatGPT connector URL
+
+1. Create `Dockerfile`:
+```dockerfile
+FROM node:20-slim
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY dist ./dist
+EXPOSE 3000
+CMD ["node", "dist/server/index.js"]
+```
+
+2. Create `render.yaml`:
+```yaml
+services:
+  - type: web
+    name: {app-name}
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: HTTP_MODE
+        value: true
+      - key: NODE_ENV
+        value: production
+```
+
+3. Push to GitHub and connect to Render
+4. ChatGPT connector URL: `https://{app-name}.onrender.com/mcp`
 
 ## State Persistence
 
-After each phase, save progress to `.chatgpt-app/state.json` for resume capability.
+Save progress to `.chatgpt-app/state.json` after each phase.
 
 ## Getting Started
 
 When invoked, begin with:
 "What ChatGPT App would you like to build? Describe what it does and the problem it solves."
 
-Then guide them through each phase systematically, using **Pattern A by default**.
+Then guide them through each phase systematically.
