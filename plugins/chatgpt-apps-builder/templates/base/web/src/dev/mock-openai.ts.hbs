@@ -1,0 +1,194 @@
+/**
+ * Mock OpenAI Apps SDK for Local Development
+ *
+ * This file mocks the window.openai API that the ChatGPT Apps SDK provides.
+ * It allows you to test widgets locally without connecting to ChatGPT.
+ *
+ * Usage:
+ *   1. Run `npm run dev` to start the dev server
+ *   2. Open http://localhost:5173 in your browser
+ *   3. Select a widget from the dropdown
+ *   4. Use "Mock Data" panel to set toolOutput
+ */
+
+// =============================================================================
+// Mock State
+// =============================================================================
+
+interface MockState {
+  theme: "light" | "dark";
+  toolOutput: Record<string, unknown> | null;
+  toolInput: Record<string, unknown> | null;
+  widgetState: Record<string, unknown>;
+  displayMode: "inline" | "fullscreen" | "pip";
+}
+
+const mockState: MockState = {
+  theme: "light",
+  toolOutput: null,
+  toolInput: null,
+  widgetState: {},
+  displayMode: "inline",
+};
+
+// Expose for dev toolbar
+(window as unknown as { __OPENAI_MOCK__: MockState }).__OPENAI_MOCK__ = mockState;
+
+// =============================================================================
+// Mock OpenAI API
+// =============================================================================
+
+const mockOpenAI = {
+  /**
+   * Get the current theme (light/dark)
+   */
+  get theme() {
+    return mockState.theme;
+  },
+
+  /**
+   * Get tool output data (from MCP server)
+   */
+  get toolOutput() {
+    return mockState.toolOutput;
+  },
+
+  /**
+   * Get tool input arguments
+   */
+  get toolInput() {
+    return mockState.toolInput;
+  },
+
+  /**
+   * Subscribe to theme changes
+   */
+  onThemeChange(callback: (theme: "light" | "dark") => void) {
+    // Watch for class changes on html element
+    const observer = new MutationObserver(() => {
+      const isDark = document.documentElement.classList.contains("dark");
+      mockState.theme = isDark ? "dark" : "light";
+      callback(mockState.theme);
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
+    // Return unsubscribe function
+    return () => observer.disconnect();
+  },
+
+  /**
+   * Call another MCP tool
+   */
+  async callTool(name: string, args: Record<string, unknown>) {
+    console.log(`[Mock] callTool("${name}",`, args, ")");
+
+    // In dev mode, just log the call and return mock data
+    return {
+      content: [{ type: "text", text: `Mock response for ${name}` }],
+      structuredContent: { mock: true, tool: name, args },
+    };
+  },
+
+  /**
+   * Send a follow-up message to ChatGPT
+   */
+  async sendFollowUp(message: string) {
+    console.log(`[Mock] sendFollowUp("${message}")`);
+    alert(`Follow-up message: ${message}`);
+  },
+
+  /**
+   * Request a display mode change
+   */
+  async requestDisplayMode(mode: "inline" | "fullscreen" | "pip") {
+    console.log(`[Mock] requestDisplayMode("${mode}")`);
+    mockState.displayMode = mode;
+
+    // Update container class for visual feedback
+    const container = document.getElementById("widget-container");
+    if (container) {
+      container.classList.remove("fullscreen");
+      if (mode === "fullscreen") {
+        container.classList.add("fullscreen");
+      }
+    }
+  },
+
+  /**
+   * Get/set widget state (persisted across sessions in real SDK)
+   */
+  widgetState: {
+    get<T>(key: string, defaultValue: T): T {
+      return (mockState.widgetState[key] as T) ?? defaultValue;
+    },
+
+    set<T>(key: string, value: T) {
+      mockState.widgetState[key] = value as unknown as Record<string, unknown>;
+      // Persist to localStorage for dev convenience
+      try {
+        localStorage.setItem(
+          "__widget_state__",
+          JSON.stringify(mockState.widgetState)
+        );
+      } catch {
+        // Ignore storage errors
+      }
+    },
+  },
+
+  /**
+   * Create a file upload (mock)
+   */
+  async createFileUpload(options: { accept?: string; multiple?: boolean }) {
+    console.log(`[Mock] createFileUpload(`, options, ")");
+
+    return new Promise((resolve) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = options.accept || "*/*";
+      input.multiple = options.multiple || false;
+
+      input.onchange = () => {
+        const files = Array.from(input.files || []);
+        resolve(
+          files.map((f) => ({
+            id: `mock-file-${Date.now()}`,
+            name: f.name,
+            size: f.size,
+            type: f.type,
+          }))
+        );
+      };
+
+      input.click();
+    });
+  },
+};
+
+// =============================================================================
+// Install Mock API
+// =============================================================================
+
+// Install on window.openai
+(window as unknown as { openai: typeof mockOpenAI }).openai = mockOpenAI;
+
+// Load persisted widget state
+try {
+  const saved = localStorage.getItem("__widget_state__");
+  if (saved) {
+    mockState.widgetState = JSON.parse(saved);
+  }
+} catch {
+  // Ignore
+}
+
+// Sync initial theme
+mockState.theme = document.documentElement.classList.contains("dark")
+  ? "dark"
+  : "light";
+
+console.log("[Mock OpenAI] Installed. Access via window.openai or window.__OPENAI_MOCK__");

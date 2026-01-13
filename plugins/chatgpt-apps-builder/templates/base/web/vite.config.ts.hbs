@@ -1,0 +1,68 @@
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+import { resolve } from "path";
+
+/**
+ * Vite Configuration for Widget Development
+ *
+ * Features:
+ * - React Fast Refresh for hot module replacement
+ * - TypeScript support
+ * - Tailwind CSS processing
+ * - Mock OpenAI API auto-injection
+ *
+ * Usage:
+ *   npm run dev     - Start dev server with hot reload
+ *   npm run build   - Build production widgets
+ */
+
+export default defineConfig({
+  plugins: [react()],
+
+  // Dev server configuration
+  server: {
+    port: 5173,
+    open: true, // Auto-open browser
+    host: true, // Listen on all interfaces
+  },
+
+  // Resolve aliases
+  resolve: {
+    alias: {
+      "@": resolve(__dirname, "src"),
+      "@components": resolve(__dirname, "src/components"),
+      "@ui": resolve(__dirname, "src/components/ui"),
+      "@lib": resolve(__dirname, "src/lib"),
+      "@hooks": resolve(__dirname, "src/hooks.ts"),
+    },
+  },
+
+  // CSS configuration
+  css: {
+    postcss: "./postcss.config.js",
+  },
+
+  // Build configuration (for reference, main build uses esbuild directly)
+  build: {
+    outDir: "dist",
+    sourcemap: true,
+    rollupOptions: {
+      input: {
+        // List widget entry points here if using Vite for production build
+        // main: resolve(__dirname, 'index.html'),
+      },
+    },
+  },
+
+  // Optimize dependencies
+  optimizeDeps: {
+    include: ["react", "react-dom"],
+  },
+
+  // Define environment variables
+  define: {
+    "process.env.NODE_ENV": JSON.stringify(
+      process.env.NODE_ENV || "development"
+    ),
+  },
+});

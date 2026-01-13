@@ -80,14 +80,17 @@ You MUST create ALL of these files. Widgets will NOT work without them:
 - [ ] `server/tools/*.ts` - Tool handler files
 
 #### Widget Build Infrastructure (REQUIRED - DO NOT SKIP)
-- [ ] `web/package.json` - **CRITICAL**: Must include esbuild, React, Tailwind
+- [ ] `web/package.json` - **CRITICAL**: Must include esbuild, React, Tailwind, Vite
 - [ ] `web/build.js` - **CRITICAL**: Widget bundler script
 - [ ] `web/tsconfig.json` - TypeScript config for widgets
 - [ ] `web/tailwind.config.js` - Tailwind configuration
 - [ ] `web/postcss.config.js` - PostCSS configuration
+- [ ] `web/vite.config.ts` - Vite config for dev server
+- [ ] `web/index.html` - Dev preview page with widget selector
 - [ ] `web/src/globals.css` - Tailwind CSS entry point
 - [ ] `web/src/hooks.ts` - Apps SDK hooks
 - [ ] `web/src/lib/utils.ts` - Utility functions (cn, formatters)
+- [ ] `web/src/dev/mock-openai.ts` - Mock window.openai API for local testing
 
 #### Widget Components (REQUIRED for UI)
 - [ ] `web/src/widgets/*.tsx` - Widget entry points
@@ -145,6 +148,8 @@ You MUST create ALL of these files. Widgets will NOT work without them:
 ├── web/
 │   ├── package.json          # REQUIRED - DO NOT SKIP
 │   ├── build.js              # REQUIRED - DO NOT SKIP
+│   ├── vite.config.ts        # REQUIRED - Dev server config
+│   ├── index.html            # REQUIRED - Dev preview page
 │   ├── tsconfig.json         # REQUIRED
 │   ├── tailwind.config.js    # REQUIRED
 │   ├── postcss.config.js     # REQUIRED
@@ -152,6 +157,8 @@ You MUST create ALL of these files. Widgets will NOT work without them:
 │   └── src/
 │       ├── widgets/          # REQUIRED - Widget entry points
 │       ├── components/ui/    # REQUIRED - shadcn components
+│       ├── dev/
+│       │   └── mock-openai.ts # REQUIRED - Mock API for testing
 │       ├── hooks.ts          # REQUIRED - Apps SDK hooks
 │       ├── lib/utils.ts      # REQUIRED - Utilities
 │       └── globals.css       # REQUIRED - Tailwind CSS
@@ -159,6 +166,20 @@ You MUST create ALL of these files. Widgets will NOT work without them:
 └── .chatgpt-app/
     └── state.json
 ```
+
+### Dev Preview
+
+After creating widgets, test locally:
+```bash
+cd web
+npm run dev
+```
+
+This opens http://localhost:5173 with:
+- Widget selector dropdown
+- Theme toggle (light/dark)
+- Mock data panel
+- Hot reload on changes
 
 ## Phase 4: Validation & Testing
 

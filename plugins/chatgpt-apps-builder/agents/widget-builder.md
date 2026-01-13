@@ -9,19 +9,22 @@ Before completing your task, you MUST ensure ALL these files exist:
 ### Widget Build Infrastructure (REQUIRED)
 - [ ] `web/package.json` - **CRITICAL**: Must include:
   - `react`, `react-dom` dependencies
-  - `esbuild`, `tailwindcss`, `typescript` devDependencies
-  - `build` script that runs CSS + widget bundling
+  - `esbuild`, `tailwindcss`, `typescript`, `vite` devDependencies
+  - `dev` script for local preview, `build` script for production
 - [ ] `web/build.js` - **CRITICAL**: esbuild bundler that:
   - Bundles each widget TSX to JS
   - Generates `server/resources/*.ts` with HTML bundles
 - [ ] `web/tsconfig.json` - TypeScript config for JSX
 - [ ] `web/tailwind.config.js` - Tailwind configuration
 - [ ] `web/postcss.config.js` - PostCSS for Tailwind
+- [ ] `web/vite.config.ts` - Vite config for dev server
+- [ ] `web/index.html` - Dev preview page with widget selector
 
 ### Widget Source Files (REQUIRED)
 - [ ] `web/src/globals.css` - Tailwind CSS entry with theme variables
 - [ ] `web/src/hooks.ts` - Apps SDK hooks (useToolOutput, useTheme, etc.)
 - [ ] `web/src/lib/utils.ts` - Utility functions (cn, formatters)
+- [ ] `web/src/dev/mock-openai.ts` - Mock window.openai for local testing
 - [ ] `web/src/widgets/*.tsx` - Widget entry points
 - [ ] `web/src/components/ui/*.tsx` - shadcn components used
 
@@ -532,6 +535,35 @@ grep "ui://widget/widget-name.html" server/index.ts
 3. **Mount point not found:**
    - Widget filename must match root element ID pattern
    - `my-widget.tsx` → mounts to `#my-widget-root`
+
+## Dev Preview (Local Testing)
+
+Widgets can be previewed locally before building:
+
+```bash
+cd web
+npm run dev
+```
+
+This starts a Vite dev server at http://localhost:5173 with:
+- **Hot reload** - Changes appear instantly
+- **Widget selector** - Choose which widget to preview
+- **Theme toggle** - Test light/dark mode
+- **Mock data panel** - Set toolOutput JSON for testing
+- **Display mode toggle** - Test inline/fullscreen
+
+### Dev Files Created
+
+- `web/index.html` - Dev preview page with toolbar
+- `web/vite.config.ts` - Vite configuration
+- `web/src/dev/mock-openai.ts` - Mock window.openai API
+
+The mock API simulates:
+- `window.openai.toolOutput` - Tool response data
+- `window.openai.theme` - Light/dark theme
+- `window.openai.callTool()` - Logs to console
+- `window.openai.sendFollowUp()` - Shows alert
+- `window.openai.widgetState` - Persisted to localStorage
 
 ## Tools Available
 
