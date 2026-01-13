@@ -51,6 +51,27 @@ const PORT = parseInt(process.env.PORT || "3000", 10);
 const HTTP_MODE = process.env.HTTP_MODE === "true" || process.argv.includes("--http");
 const NODE_ENV = process.env.NODE_ENV || "development";
 
+// Widget configuration (required for ChatGPT Apps)
+const WIDGET_DOMAIN = process.env.WIDGET_DOMAIN || "{{kebabCase appName}}-widgets";
+const WIDGET_CSP_CONNECT = process.env.WIDGET_CSP_CONNECT || "";
+
+// Build CSP string for widgets
+function buildWidgetCSP(): string {
+  const connectSrc = ["'self'"];
+  if (WIDGET_CSP_CONNECT) {
+    connectSrc.push(...WIDGET_CSP_CONNECT.split(",").map(d => d.trim()));
+  }
+  return JSON.stringify({
+    "default-src": ["'self'"],
+    "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+    "style-src": ["'self'", "'unsafe-inline'"],
+    "img-src": ["'self'", "data:", "https:"],
+    "connect-src": connectSrc,
+    "font-src": ["'self'", "data:"],
+  });
+}
+const widgetCSP = buildWidgetCSP();
+
 // Validate required environment variables
 function validateEnv() {
   const required: string[] = [
@@ -132,6 +153,8 @@ const RESOURCES = [
     _meta: {
       "openai/widgetDescription": "{{description}}",
       "openai/widgetPrefersBorder": true,
+      "openai/widgetDomain": WIDGET_DOMAIN,
+      "openai/widgetCSP": widgetCSP,
     },
   },
 {{/each}}
