@@ -1,125 +1,101 @@
 # ChatGPT Apps Builder Plugin
 
-A Claude Code plugin for building complete ChatGPT Apps with MCP servers, React widgets, and cloud deployment.
+A Claude Code plugin for building complete ChatGPT Apps with MCP servers, inline widgets, and cloud deployment.
 
 ## Overview
 
 This plugin helps you build ChatGPT Apps from concept to deployment:
 
 1. **Conceptualize** - Define value proposition, use cases, and tool topology
-2. **Design** - Create MCP tools and React widgets following best practices
+2. **Design** - Create MCP tools and inline widgets following best practices
 3. **Implement** - Generate complete TypeScript code
 4. **Test** - Validate with golden prompts and MCP Inspector
-5. **Deploy** - Ship to Render with PostgreSQL via Supabase
-
-## Installation
-
-```bash
-# Add to your Claude Code plugins
-claude plugin add chatgpt-apps-builder
-```
+5. **Deploy** - Ship to Render with PostgreSQL
 
 ## Quick Start
 
 ```bash
 # Start building a new ChatGPT App
-/chatgpt-app:new
+/chatgpt-apps-builder:new-app
 
 # Resume an in-progress app
-/chatgpt-app:resume
+/chatgpt-apps-builder:resume-app
 ```
 
 ## Available Skills
 
 | Skill | Description |
 |-------|-------------|
-| `/chatgpt-app:new` | Create a new ChatGPT App from concept |
-| `/chatgpt-app:resume` | Resume building an in-progress app |
-| `/chatgpt-app:add-tool` | Add an MCP tool |
-| `/chatgpt-app:add-widget` | Add a React widget |
-| `/chatgpt-app:add-auth` | Configure Auth0 or Supabase Auth |
-| `/chatgpt-app:add-database` | Configure Supabase PostgreSQL |
-| `/chatgpt-app:golden-prompts` | Generate test prompts |
-| `/chatgpt-app:validate` | Run validation suite |
-| `/chatgpt-app:test` | Run MCP Inspector tests |
-| `/chatgpt-app:deploy` | Deploy to Render |
+| `/chatgpt-apps-builder:new-app` | Create a new ChatGPT App from concept |
+| `/chatgpt-apps-builder:resume-app` | Resume building an in-progress app |
+| `/chatgpt-apps-builder:add-tool` | Add an MCP tool |
+| `/chatgpt-apps-builder:add-widget` | Add an inline widget |
+| `/chatgpt-apps-builder:add-auth` | Configure Auth0 or Supabase Auth |
+| `/chatgpt-apps-builder:add-database` | Configure Supabase PostgreSQL |
+| `/chatgpt-apps-builder:golden-prompts` | Generate test prompts |
+| `/chatgpt-apps-builder:validate` | Run validation suite |
+| `/chatgpt-apps-builder:test` | Run MCP Inspector tests |
+| `/chatgpt-apps-builder:deploy` | Deploy to Render |
 
 ## Specialized Agents
 
 | Agent | Purpose |
 |-------|---------|
-| `chatgpt-app-architect` | Conceptualizes apps with UX principles |
-| `chatgpt-mcp-generator` | Generates TypeScript MCP server code |
-| `chatgpt-widget-builder` | Creates React widgets with Apps SDK |
-| `chatgpt-schema-designer` | Designs PostgreSQL schemas |
-| `chatgpt-auth-configurator` | Configures OAuth authentication |
-| `chatgpt-deploy-orchestrator` | Orchestrates Render deployment |
-| `chatgpt-test-runner` | Runs automated MCP tests |
-
-## MCP Integrations
-
-### Supabase MCP
-Database management for your ChatGPT App:
-- Create and manage tables
-- Run migrations
-- Test queries
-
-```bash
-claude mcp add supabase https://mcp.supabase.com/mcp
-```
-
-### Render MCP
-Deployment automation:
-- Create web services
-- Provision PostgreSQL
-- Manage environment variables
-
-```bash
-claude mcp add --transport http render https://mcp.render.com/mcp --header "Authorization: Bearer $RENDER_API_KEY"
-```
+| `app-architect` | Conceptualizes apps with UX principles |
+| `mcp-generator` | Generates TypeScript MCP server code |
+| `widget-builder` | Creates inline HTML/CSS/JS widgets |
+| `schema-designer` | Designs PostgreSQL schemas |
+| `auth-configurator` | Configures OAuth authentication |
+| `deploy-orchestrator` | Orchestrates Render deployment |
+| `test-runner` | Runs automated MCP tests |
 
 ## Generated App Structure
 
 ```
 my-chatgpt-app/
-├── package.json
-├── tsconfig.json
-├── setup.sh               # One-command setup script
-├── START.sh               # Start server script
+├── package.json              # Dependencies and scripts
+├── tsconfig.server.json      # TypeScript config
+├── setup.sh                  # One-command setup
+├── START.sh                  # Multi-mode server launcher
+├── .env                      # Environment variables
+├── .env.example              # Environment template
+├── .gitignore
 ├── server/
-│   ├── index.ts           # MCP server entry
-│   ├── tools/             # Tool handlers
-│   ├── resources/         # Widget resources
-│   ├── auth/              # Authentication (optional)
-│   └── db/                # Database pool (optional)
-├── web/
-│   ├── src/
-│   │   ├── hooks.ts       # Apps SDK hooks
-│   │   ├── theme.ts       # Theming utilities
-│   │   └── ui/            # React components
-│   └── package.json
-├── supabase/              # Database migrations (optional)
-│   └── migrations/
-├── .env.example
+│   └── index.ts              # Complete MCP server with inline widgets
 ├── .chatgpt-app/
-│   └── state.json         # Build progress
+│   └── state.json            # Build progress
 ├── Dockerfile
 └── render.yaml
 ```
 
-## Setup Scripts
+## Key Architecture (Pattern A)
 
-Generated apps include foolproof setup scripts:
+This plugin generates **Pattern A** apps with:
+
+- **Single-file architecture**: All code in `server/index.ts`
+- **Inline widgets**: Widget HTML generated by `generateWidgetHtml()` function
+- **No build pipeline**: Pure HTML/CSS/JS widgets, no React/Vite/bundlers
+- **Session management**: `Map<string, StreamableHTTPServerTransport>`
+- **Widget preview**: Local testing at `/preview` endpoint
+
+### Critical Requirements
+
+Apps MUST use:
+- `Server` class from `@modelcontextprotocol/sdk/server/index.js` (NOT `McpServer`)
+- `StreamableHTTPServerTransport` for HTTP sessions
+- Widget URIs: `ui://widget/{widget-id}.html`
+- Widget MIME type: `text/html+skybridge`
+- `structuredContent` in tool responses for widget data
+- `_meta` with `openai/outputTemplate` on tool definitions and responses
+
+## Setup Scripts
 
 ### setup.sh
 One-command setup that:
-- Checks prerequisites (Node.js, npm, Supabase CLI, Docker)
+- Checks Node.js 18+
 - Installs dependencies
-- Builds web assets (widgets)
 - Builds server
-- Starts local Supabase (if database enabled)
-- Applies database migrations
-- Auto-generates `.env` with correct credentials
+- Creates `.env` with defaults
 
 ```bash
 ./setup.sh
@@ -130,9 +106,21 @@ Start the server in different modes:
 
 ```bash
 ./START.sh              # HTTP mode (for ChatGPT connector)
-./START.sh --stdio      # Stdio mode (for MCP Inspector)
 ./START.sh --dev        # Development mode with hot reload
+./START.sh --preview    # Open widget preview in browser
+./START.sh --stdio      # Stdio mode (for MCP Inspector)
 ```
+
+## Widget Preview
+
+Test widgets locally before connecting to ChatGPT:
+
+```bash
+npm run dev
+open http://localhost:3000/preview
+```
+
+Click any widget to see it rendered with mock data.
 
 ## UX Principles
 
@@ -154,45 +142,34 @@ This plugin enforces ChatGPT Apps best practices:
 
 ### Validation Suite
 ```bash
-/chatgpt-app:validate
+/chatgpt-apps-builder:validate
 ```
 Checks:
-- MCP schema validity
+- Correct MCP server implementation
+- Widget configuration
 - Tool annotations
-- Widget CSP configuration
-- Database migrations
-- UX principles compliance
+- Package.json scripts
 
 ### Golden Prompts
 ```bash
-/chatgpt-app:golden-prompts
+/chatgpt-apps-builder:golden-prompts
 ```
 Generates:
 - Direct prompts (5+ per tool)
 - Indirect prompts (5+ per tool)
 - Negative prompts (3+ per category)
 
-### MCP Inspector
-```bash
-/chatgpt-app:test
-```
-Tests:
-- Tool discovery
-- Tool execution
-- Error handling
-- Widget rendering
-
 ## Deployment
 
 ### To Render
 ```bash
-/chatgpt-app:deploy
+/chatgpt-apps-builder:deploy
 ```
 
 This will:
 1. Run validation and tests
 2. Generate `render.yaml` and `Dockerfile`
-3. Create PostgreSQL database
+3. Create PostgreSQL database (if needed)
 4. Deploy web service
 5. Configure environment variables
 6. Verify health checks
@@ -200,7 +177,7 @@ This will:
 
 ## State Persistence
 
-Your build progress is saved to `.chatgpt-app/state.json`:
+Build progress is saved to `.chatgpt-app/state.json`:
 
 ```json
 {
@@ -208,31 +185,14 @@ Your build progress is saved to `.chatgpt-app/state.json`:
   "phase": "implementation",
   "tools": [...],
   "widgets": [...],
-  "auth": { "enabled": true, "provider": "auth0" },
-  "database": { "enabled": true, "provider": "supabase" },
+  "auth": { "enabled": false },
+  "database": { "enabled": false },
   "validation": { "passed": true },
   "deployment": { "status": "deployed" }
 }
 ```
 
-Resume anytime with `/chatgpt-app:resume`.
-
-## Templates
-
-The plugin includes templates for:
-
-- **Base**: Package config, TypeScript setup, server entry
-- **Tools**: CRUD, query, widget, external API patterns
-- **Widgets**: List, detail, form, carousel patterns
-- **Auth**: Auth0 and Supabase configurations
-- **Database**: Supabase migrations and connection pool
-- **Deploy**: Dockerfile and Render configuration
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Submit a pull request
+Resume anytime with `/chatgpt-apps-builder:resume-app`.
 
 ## License
 
@@ -242,6 +202,3 @@ MIT
 
 - [ChatGPT Apps SDK Documentation](https://developers.openai.com/apps-sdk)
 - [MCP Specification](https://modelcontextprotocol.io)
-- [Claude Code Plugins](https://code.claude.com/docs/en/plugins)
-- [Supabase MCP](https://supabase.com/docs/guides/getting-started/mcp)
-- [Render MCP](https://render.com/docs/mcp-server)

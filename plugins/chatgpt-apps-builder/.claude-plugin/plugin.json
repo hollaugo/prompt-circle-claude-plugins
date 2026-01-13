@@ -1,9 +1,9 @@
 {
   "name": "chatgpt-apps-builder",
-  "description": "Build complete ChatGPT Apps with MCP servers, React widgets (shadcn/ui), and cloud deployment to Render",
-  "version": "1.0.0",
+  "description": "Build complete ChatGPT Apps with MCP servers, inline widgets, and cloud deployment to Render",
+  "version": "1.1.0",
   "author": {
     "name": "Prompt Circle",
-    "url": "https://github.com/prompt-circle"
+    "url": "https://github.com/hollaugo"
   }
 }

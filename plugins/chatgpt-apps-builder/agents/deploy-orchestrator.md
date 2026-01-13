@@ -82,7 +82,7 @@ RUN npm ci
 # Copy source
 COPY . .
 
-# Build server and widgets
+# Build server
 RUN npm run build
 
 # Production stage
@@ -92,7 +92,6 @@ WORKDIR /app
 
 # Copy built assets
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/web/dist ./web/dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
 

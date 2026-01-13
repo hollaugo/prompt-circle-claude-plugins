@@ -7,8 +7,8 @@ A collection of Claude Code plugins for AI-assisted development workflows.
 ### Add the Marketplace
 
 ```bash
-# From GitHub (after publishing)
-/plugin marketplace add prompt-circle/prompt-circle-claude-plugins
+# From GitHub
+/plugin marketplace add hollaugo/prompt-circle-claude-plugins
 
 # From local directory (for development)
 /plugin marketplace add /path/to/prompt-circle-claude-plugins
@@ -24,34 +24,34 @@ A collection of Claude Code plugins for AI-assisted development workflows.
 
 ### chatgpt-apps-builder
 
-Build complete ChatGPT Apps with MCP servers, React widgets (shadcn/ui), and cloud deployment to Render.
+Build complete ChatGPT Apps with MCP servers, inline widgets, and cloud deployment to Render.
 
 **Features:**
-- Full-stack TypeScript (MCP server + React widgets)
-- shadcn/ui components with Tailwind CSS
-- Multiple widget patterns: List, Detail, Form, Chart, Carousel
+- Single-file architecture (server/index.ts with inline widgets)
+- No build pipeline for widgets - pure HTML/CSS/JS
+- Widget preview at `/preview` endpoint for local testing
+- Session management with StreamableHTTPServerTransport
 - Optional authentication (Auth0, Supabase Auth)
 - Optional database (Supabase PostgreSQL)
 - Deployment to Render
-- State persistence across sessions
 
 **Skills:**
 | Command | Description |
 |---------|-------------|
-| `/chatgpt-app:new` | Create a new ChatGPT App from concept to working code |
-| `/chatgpt-app:resume` | Resume building an in-progress app |
-| `/chatgpt-app:add-tool` | Add a new MCP tool |
-| `/chatgpt-app:add-widget` | Add a new React widget |
-| `/chatgpt-app:add-auth` | Configure authentication |
-| `/chatgpt-app:add-database` | Configure Supabase database |
-| `/chatgpt-app:validate` | Run validation suite |
-| `/chatgpt-app:test` | Run automated tests |
-| `/chatgpt-app:deploy` | Deploy to Render |
+| `/chatgpt-apps-builder:new-app` | Create a new ChatGPT App from concept to working code |
+| `/chatgpt-apps-builder:resume-app` | Resume building an in-progress app |
+| `/chatgpt-apps-builder:add-tool` | Add a new MCP tool |
+| `/chatgpt-apps-builder:add-widget` | Add a new inline widget |
+| `/chatgpt-apps-builder:add-auth` | Configure authentication |
+| `/chatgpt-apps-builder:add-database` | Configure Supabase database |
+| `/chatgpt-apps-builder:validate` | Run validation suite |
+| `/chatgpt-apps-builder:test` | Run automated tests |
+| `/chatgpt-apps-builder:deploy` | Deploy to Render |
 
 **Agents:**
 - `app-architect` - Conceptualizes apps with UX principles
 - `mcp-generator` - Generates TypeScript MCP server code
-- `widget-builder` - Creates React widgets with shadcn/ui
+- `widget-builder` - Creates inline HTML/CSS/JS widgets
 - `schema-designer` - Designs PostgreSQL schemas
 - `auth-configurator` - Configures OAuth flows
 - `deploy-orchestrator` - Orchestrates Render deployment
