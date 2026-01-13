@@ -1,0 +1,101 @@
+{
+  "name": "chatgpt-apps-builder",
+  "version": "1.0.0",
+  "description": "Build complete ChatGPT Apps with MCP servers, React widgets (shadcn/ui), and cloud deployment to Render",
+  "author": {
+    "name": "Prompt Circle",
+    "url": "https://github.com/prompt-circle"
+  },
+  "homepage": "https://github.com/prompt-circle/prompt-circle-claude-plugins",
+
+  "skills": [
+    {
+      "name": "chatgpt-app:new",
+      "description": "Create a new ChatGPT App from concept to working code",
+      "path": "skills/new-app"
+    },
+    {
+      "name": "chatgpt-app:resume",
+      "description": "Resume building an in-progress ChatGPT App",
+      "path": "skills/resume-app"
+    },
+    {
+      "name": "chatgpt-app:add-tool",
+      "description": "Add a new MCP tool to your ChatGPT App",
+      "path": "skills/add-tool"
+    },
+    {
+      "name": "chatgpt-app:add-widget",
+      "description": "Add a new React widget to your ChatGPT App",
+      "path": "skills/add-widget"
+    },
+    {
+      "name": "chatgpt-app:add-auth",
+      "description": "Configure authentication (Auth0 or Supabase)",
+      "path": "skills/add-auth"
+    },
+    {
+      "name": "chatgpt-app:add-database",
+      "description": "Configure database with Supabase PostgreSQL",
+      "path": "skills/add-database"
+    },
+    {
+      "name": "chatgpt-app:golden-prompts",
+      "description": "Generate test prompts for your app",
+      "path": "skills/golden-prompts"
+    },
+    {
+      "name": "chatgpt-app:validate",
+      "description": "Run validation suite on your app",
+      "path": "skills/validate"
+    },
+    {
+      "name": "chatgpt-app:test",
+      "description": "Run automated tests with MCP Inspector",
+      "path": "skills/test"
+    },
+    {
+      "name": "chatgpt-app:deploy",
+      "description": "Deploy your app to Render",
+      "path": "skills/deploy"
+    }
+  ],
+
+  "agents": [
+    {
+      "name": "chatgpt-app-architect",
+      "description": "Conceptualizes ChatGPT Apps applying UX principles and identifying value propositions",
+      "path": "agents/app-architect.md"
+    },
+    {
+      "name": "chatgpt-mcp-generator",
+      "description": "Generates TypeScript MCP server code with tools and resources",
+      "path": "agents/mcp-generator.md"
+    },
+    {
+      "name": "chatgpt-widget-builder",
+      "description": "Creates React widgets with Apps SDK hooks and theming",
+      "path": "agents/widget-builder.md"
+    },
+    {
+      "name": "chatgpt-schema-designer",
+      "description": "Designs PostgreSQL schemas for Supabase with migrations",
+      "path": "agents/schema-designer.md"
+    },
+    {
+      "name": "chatgpt-auth-configurator",
+      "description": "Configures OAuth authentication flows for Auth0 or Supabase",
+      "path": "agents/auth-configurator.md"
+    },
+    {
+      "name": "chatgpt-deploy-orchestrator",
+      "description": "Orchestrates deployment to Render via MCP",
+      "path": "agents/deploy-orchestrator.md"
+    },
+    {
+      "name": "chatgpt-test-runner",
+      "description": "Runs MCP Inspector automated tests and golden prompt validation",
+      "path": "agents/test-runner.md"
+    }
+  ]
+}
