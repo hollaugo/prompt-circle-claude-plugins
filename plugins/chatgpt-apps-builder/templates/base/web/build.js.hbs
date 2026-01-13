@@ -2,22 +2,41 @@
 /**
  * Widget Build Script
  *
- * Bundles React widgets using esbuild with:
- * - TypeScript support
- * - JSX automatic runtime
- * - CSS injection (optional)
- * - Minification for production
+ * Bundles React widgets using esbuild and generates server-side resources.
+ *
+ * This script:
+ * 1. Bundles each widget TSX file into a single JS file (ESM)
+ * 2. Builds Tailwind CSS
+ * 3. Creates HTML bundles with embedded JS/CSS for ChatGPT Apps SDK
+ * 4. Generates server resource files that export the HTML bundles
+ *
+ * Output structure:
+ *   web/dist/
+ *     ├── [widget-name].js       # Bundled React component
+ *     └── styles.css             # Tailwind CSS (built separately)
+ *   server/resources/
+ *     └── [widget-name].ts       # Exports HTML bundle as string
  */
 
 import * as esbuild from "esbuild";
-import { readdirSync, existsSync } from "fs";
-import { join, basename } from "path";
+import { readdirSync, existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
+import { join, basename, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const isWatch = process.argv.includes("--watch");
+const jsOnly = process.argv.includes("--js-only");
+const generateBundles = process.argv.includes("--generate-bundles");
 const srcDir = "./src/widgets";
 const outDir = "./dist";
+const serverResourceDir = "../server/resources";
 
-// Find all widget entry points
+// =============================================================================
+// Find Widget Entry Points
+// =============================================================================
+
 function findWidgets() {
   if (!existsSync(srcDir)) {
     console.log("No widgets directory found at", srcDir);
@@ -32,6 +51,66 @@ function findWidgets() {
     }));
 }
 
+// =============================================================================
+// Generate HTML Bundle for ChatGPT Apps SDK
+// =============================================================================
+
+function generateHtmlBundle(widgetName, jsCode, cssCode) {
+  // Convert kebab-case to root element ID
+  const rootId = `${widgetName}-root`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* Reset and base styles */
+    *, *::before, *::after { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+    /* Tailwind CSS */
+    ${cssCode}
+  </style>
+</head>
+<body>
+  <div id="${rootId}"></div>
+  <script type="module">
+${jsCode}
+  </script>
+</body>
+</html>`;
+}
+
+// =============================================================================
+// Generate Server Resource File
+// =============================================================================
+
+function generateServerResource(widgetName, htmlBundle) {
+  // Escape backticks and ${} in the HTML for template literal
+  const escapedHtml = htmlBundle
+    .replace(/\\/g, "\\\\")
+    .replace(/`/g, "\\`")
+    .replace(/\$\{/g, "\\${");
+
+  // Convert kebab-case to camelCase for export name
+  const camelName = widgetName.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+
+  return `// Auto-generated widget bundle for ${widgetName}
+// Do not edit manually - regenerate with: cd web && npm run build
+
+/**
+ * HTML bundle containing the ${widgetName} React widget.
+ * This is served as a text/html+skybridge resource for ChatGPT Apps SDK.
+ */
+export const ${camelName}Bundle = \`${escapedHtml}\`;
+`;
+}
+
+// =============================================================================
+// Main Build Function
+// =============================================================================
+
 async function build() {
   const widgets = findWidgets();
 
@@ -42,6 +121,11 @@ async function build() {
 
   console.log(`Building ${widgets.length} widget(s)...`);
 
+  // Ensure output directories exist
+  mkdirSync(outDir, { recursive: true });
+  mkdirSync(serverResourceDir, { recursive: true });
+
+  // Build options for esbuild
   const buildOptions = {
     entryPoints: widgets.map(w => w.entry),
     bundle: true,
@@ -52,6 +136,7 @@ async function build() {
     splitting: false,
     sourcemap: isWatch,
     target: ["es2020"],
+    write: true,
     loader: {
       ".tsx": "tsx",
       ".ts": "ts",
@@ -64,14 +149,110 @@ async function build() {
   };
 
   if (isWatch) {
+    // Watch mode - just bundle JS, don't regenerate HTML
     const ctx = await esbuild.context(buildOptions);
     await ctx.watch();
     console.log("Watching for changes...");
-  } else {
+    console.log("Note: Run full build to regenerate HTML bundles");
+    return;
+  }
+
+  // Build JS bundles (unless only generating HTML bundles)
+  if (!generateBundles) {
     await esbuild.build(buildOptions);
     widgets.forEach(w => console.log(`  ✓ ${w.name}.js`));
-    console.log("Build complete!");
   }
+
+  // If JS-only mode, stop here
+  if (jsOnly) {
+    console.log("JS build complete!");
+    return;
+  }
+
+  // Generate HTML bundles and server resources
+  console.log("\nGenerating HTML bundles and server resources...");
+
+  // Read the CSS file (built by Tailwind separately)
+  let cssCode = "";
+  const cssPath = join(outDir, "styles.css");
+  if (existsSync(cssPath)) {
+    cssCode = readFileSync(cssPath, "utf-8");
+  } else {
+    console.warn("  ⚠ No styles.css found - run 'npm run build:css' first");
+    console.warn("  Widgets will be generated without Tailwind styles");
+  }
+
+  // Generate HTML bundles and server resources for each widget
+  for (const widget of widgets) {
+    const jsPath = join(outDir, `${widget.name}.js`);
+
+    if (!existsSync(jsPath)) {
+      console.error(`  ✗ ${widget.name}.js not found - run 'npm run build:widgets' first`);
+      continue;
+    }
+
+    const jsCode = readFileSync(jsPath, "utf-8");
+
+    // Generate HTML bundle
+    const htmlBundle = generateHtmlBundle(widget.name, jsCode, cssCode);
+
+    // Generate server resource file
+    const resourceCode = generateServerResource(widget.name, htmlBundle);
+    const resourcePath = join(serverResourceDir, `${widget.name}.ts`);
+    writeFileSync(resourcePath, resourceCode);
+
+    console.log(`  ✓ ${widget.name}`);
+    console.log(`    → server/resources/${widget.name}.ts`);
+  }
+
+  // Generate index file for server resources
+  const indexContent = widgets
+    .map(w => {
+      const camelName = w.name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      return `export { ${camelName}Bundle } from "./${w.name}.js";`;
+    })
+    .join("\n");
+
+  writeFileSync(join(serverResourceDir, "index.ts"), `// Auto-generated - do not edit\n${indexContent}\n`);
+
+  console.log("\nBuild complete!");
+  console.log("Server resources generated in server/resources/");
+}
+
+// =============================================================================
+// Validation Function (for npm run validate:widgets)
+// =============================================================================
+
+export function validateWidgets() {
+  const widgets = findWidgets();
+
+  if (widgets.length === 0) {
+    console.log("No widgets found");
+    return false;
+  }
+
+  let valid = true;
+
+  for (const widget of widgets) {
+    const jsPath = join(outDir, `${widget.name}.js`);
+    const resourcePath = join(serverResourceDir, `${widget.name}.ts`);
+
+    if (!existsSync(jsPath)) {
+      console.error(`✗ Missing: web/dist/${widget.name}.js`);
+      valid = false;
+    }
+
+    if (!existsSync(resourcePath)) {
+      console.error(`✗ Missing: server/resources/${widget.name}.ts`);
+      valid = false;
+    }
+
+    if (existsSync(jsPath) && existsSync(resourcePath)) {
+      console.log(`✓ ${widget.name}: bundle and resource OK`);
+    }
+  }
+
+  return valid;
 }
 
 build().catch((err) => {

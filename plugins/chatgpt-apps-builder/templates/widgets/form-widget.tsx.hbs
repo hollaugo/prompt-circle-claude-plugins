@@ -273,13 +273,24 @@ function {{pascalCase name}}FormWidget() {
 }
 
 // =============================================================================
-// Mount
+// Mount - Uses root element ID matching build.js pattern
 // =============================================================================
 
+// The build.js generates HTML with div id="${widgetName}-root"
+// Widget filename becomes the root ID: {{kebabCase name}}-form.tsx → {{kebabCase name}}-form-root
 const container = document.getElementById("{{kebabCase name}}-form-root");
 if (container) {
   const root = createRoot(container);
   root.render(<{{pascalCase name}}FormWidget />);
+} else {
+  // Fallback for development/testing
+  const fallback = document.getElementById("root");
+  if (fallback) {
+    const root = createRoot(fallback);
+    root.render(<{{pascalCase name}}FormWidget />);
+  } else {
+    console.error("Widget mount point not found. Expected: {{kebabCase name}}-form-root or root");
+  }
 }
 
 export default {{pascalCase name}}FormWidget;

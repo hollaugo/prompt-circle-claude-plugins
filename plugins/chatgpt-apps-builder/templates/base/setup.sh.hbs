@@ -96,7 +96,22 @@ if [ -d "web" ]; then
   cd web
   npm run build
   cd ..
-  echo "  ✓ Widgets built to web/dist/"
+
+  # Verify widget build outputs
+  if [ -d "web/dist" ] && [ "$(ls -A web/dist/*.js 2>/dev/null)" ]; then
+    echo "  ✓ Widget JS bundles: web/dist/"
+  else
+    echo "  ⚠ WARNING: No widget JS files found in web/dist/"
+    echo "    Widgets may not display in ChatGPT!"
+  fi
+
+  if [ -d "server/resources" ] && [ "$(ls -A server/resources/*.ts 2>/dev/null)" ]; then
+    echo "  ✓ Server resources generated: server/resources/"
+  else
+    echo "  ⚠ WARNING: No server resource files found!"
+    echo "    Widget HTML bundles are missing - widgets will NOT work!"
+    echo "    Try: cd web && npm run build"
+  fi
   echo ""
 fi
 

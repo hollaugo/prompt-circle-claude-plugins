@@ -316,13 +316,24 @@ function {{pascalCase name}}DetailWidget() {
 }
 
 // =============================================================================
-// Mount
+// Mount - Uses root element ID matching build.js pattern
 // =============================================================================
 
+// The build.js generates HTML with div id="${widgetName}-root"
+// Widget filename becomes the root ID: {{kebabCase name}}-detail.tsx → {{kebabCase name}}-detail-root
 const container = document.getElementById("{{kebabCase name}}-detail-root");
 if (container) {
   const root = createRoot(container);
   root.render(<{{pascalCase name}}DetailWidget />);
+} else {
+  // Fallback for development/testing
+  const fallback = document.getElementById("root");
+  if (fallback) {
+    const root = createRoot(fallback);
+    root.render(<{{pascalCase name}}DetailWidget />);
+  } else {
+    console.error("Widget mount point not found. Expected: {{kebabCase name}}-detail-root or root");
+  }
 }
 
 export default {{pascalCase name}}DetailWidget;

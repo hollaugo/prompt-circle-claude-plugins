@@ -24,17 +24,29 @@ You are helping the user validate their ChatGPT App before testing and deploymen
 - Delete tools have `destructiveHint: true`
 - External API tools have `openWorldHint: true`
 
-### 4. Widget Validation
+### 4. Widget Build Validation (CRITICAL)
+- **Build outputs exist:**
+  - `web/dist/*.js` files present (bundled widgets)
+  - `server/resources/*.ts` files present (HTML bundles)
+- **Server imports match:**
+  - Each widget bundle is imported in `server/index.ts`
+  - Resource URIs match `ui://widget/{name}.html`
+- **Tool connections:**
+  - Widget tools have `_meta.openai/outputTemplate`
+  - Output template URI matches registered resource
+
+### 5. Widget Content Validation
 - MIME type is `text/html+skybridge`
 - `widgetDescription` is present
 - CSP configuration is valid
+- Root element ID matches widget filename pattern
 
-### 5. Database Validation (if enabled)
+### 6. Database Validation (if enabled)
 - All migrations are valid SQL
 - Tables have `user_subject` column
 - Indexes exist for user queries
 
-### 6. UX Principles Check
+### 7. UX Principles Check
 - No anti-patterns detected
 - Tools are atomic and composable
 - UI enhances rather than decorates

@@ -3,14 +3,17 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "build": "npm run build:css && npm run build:widgets",
+    "build": "npm run build:css && npm run build:widgets && npm run build:bundles",
     "build:css": "tailwindcss -i ./src/globals.css -o ./dist/styles.css --minify",
-    "build:widgets": "node build.js",
+    "build:widgets": "node build.js --js-only",
+    "build:bundles": "node build.js --generate-bundles",
+    "build:all": "npm run build:css && node build.js",
     "watch": "concurrently \"npm run watch:css\" \"npm run watch:widgets\"",
     "watch:css": "tailwindcss -i ./src/globals.css -o ./dist/styles.css --watch",
     "watch:widgets": "node build.js --watch",
     "typecheck": "tsc --noEmit",
-    "ui:add": "npx shadcn@latest add"
+    "ui:add": "npx shadcn@latest add",
+    "validate:widgets": "node -e \"require('./build.js').validateWidgets()\""
   },
   "dependencies": {
     "react": "^18.2.0",

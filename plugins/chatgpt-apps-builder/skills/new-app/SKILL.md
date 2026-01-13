@@ -68,16 +68,27 @@ Generate the complete application code:
    ```
    {app-name}/
    ├── package.json
+   ├── tsconfig.json
+   ├── setup.sh              # One-command setup
+   ├── START.sh              # Start server script
    ├── server/
-   │   ├── index.ts
-   │   ├── tools/
-   │   ├── resources/
+   │   ├── index.ts          # MCP server
+   │   ├── tools/            # Tool handlers
+   │   ├── resources/        # Widget bundles (AUTO-GENERATED)
    │   ├── auth/ (optional)
    │   └── db/ (optional)
    ├── web/
+   │   ├── package.json      # Widget dependencies
+   │   ├── build.js          # Widget bundler
+   │   ├── tailwind.config.js
    │   └── src/
+   │       ├── widgets/      # Widget TSX files
+   │       ├── components/ui/ # shadcn components
+   │       ├── hooks.ts      # Apps SDK hooks
+   │       └── globals.css   # Tailwind CSS
    ├── supabase/ (optional)
    └── .chatgpt-app/
+       └── state.json        # Build progress
    ```
 
 2. **Generate MCP Server**
@@ -86,10 +97,26 @@ Generate the complete application code:
 3. **Generate Widgets**
    Use the `chatgpt-widget-builder` agent.
 
-4. **Generate Database Schema**
+4. **CRITICAL: Build Widgets**
+   After generating widget source files, ALWAYS run:
+   ```bash
+   cd web && npm install && npm run build
+   ```
+   This generates:
+   - `web/dist/*.js` - Bundled widget JS
+   - `server/resources/*.ts` - HTML bundles for MCP serving
+
+5. **Verify Widget Build**
+   Check these files exist:
+   ```bash
+   ls server/resources/      # Should have *.ts files
+   ```
+   If missing, widgets will NOT display in ChatGPT!
+
+6. **Generate Database Schema**
    Use the `chatgpt-schema-designer` agent (if needed).
 
-5. **Generate Golden Prompts**
+7. **Generate Golden Prompts**
    Create test prompts (5+ direct, 5+ indirect, negative).
 
 ## Phase 4: Validation & Testing

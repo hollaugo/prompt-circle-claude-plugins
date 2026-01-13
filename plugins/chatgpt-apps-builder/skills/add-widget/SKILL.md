@@ -70,13 +70,31 @@ Choose from these standardized widget patterns:
    web/src/components/ui/*.tsx     - Any new shadcn components needed
    ```
 
-5. **Register Widget in Server**
-   Update server to:
-   - Add widget definition with template URI
-   - Add MCP resource handler for widget HTML
-   - Link tool's outputTemplate to widget
+5. **CRITICAL: Build Widget**
+   After generating the widget source, ALWAYS run:
+   ```bash
+   cd web && npm run build
+   ```
+   This:
+   - Bundles the widget TSX to `web/dist/{name}.js`
+   - Generates `server/resources/{name}.ts` with HTML bundle
+   - Server resources are AUTO-GENERATED, do NOT create manually!
 
-6. **Update State**
+6. **Verify Build Output**
+   ```bash
+   # Check these files exist:
+   ls web/dist/{name}.js
+   ls server/resources/{name}.ts
+   ```
+   If missing, the widget will NOT display in ChatGPT!
+
+7. **Register Widget in Server**
+   Update `server/index.ts` to:
+   - Import: `import { {name}Bundle } from "./resources/{name}.js";`
+   - Add to RESOURCES array with URI `ui://widget/{name}.html`
+   - Link tool's `_meta.openai/outputTemplate` to widget URI
+
+8. **Update State**
    Add widget to `.chatgpt-app/state.json` widgets array.
 
 ## shadcn/ui Component Usage

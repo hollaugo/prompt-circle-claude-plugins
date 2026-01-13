@@ -219,13 +219,24 @@ function {{pascalCase name}}ListWidget() {
 }
 
 // =============================================================================
-// Mount
+// Mount - Uses root element ID matching build.js pattern
 // =============================================================================
 
+// The build.js generates HTML with div id="${widgetName}-root"
+// Widget filename becomes the root ID: {{kebabCase name}}-list.tsx → {{kebabCase name}}-list-root
 const container = document.getElementById("{{kebabCase name}}-list-root");
 if (container) {
   const root = createRoot(container);
   root.render(<{{pascalCase name}}ListWidget />);
+} else {
+  // Fallback for development/testing - try generic "root" ID
+  const fallback = document.getElementById("root");
+  if (fallback) {
+    const root = createRoot(fallback);
+    root.render(<{{pascalCase name}}ListWidget />);
+  } else {
+    console.error("Widget mount point not found. Expected: {{kebabCase name}}-list-root or root");
+  }
 }
 
 export default {{pascalCase name}}ListWidget;
