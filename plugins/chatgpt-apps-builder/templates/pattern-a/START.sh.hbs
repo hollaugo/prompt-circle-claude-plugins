@@ -1,0 +1,96 @@
+#!/bin/bash
+#
+# {{appName}} - Server Launcher (Pattern A)
+#
+# Usage:
+#   ./START.sh              Start HTTP server (default, for ChatGPT)
+#   ./START.sh --dev        Development mode with hot reload + logs
+#   ./START.sh --preview    Start server and open widget preview
+#   ./START.sh --stdio      Start in stdio mode (for MCP Inspector)
+#
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+# Load environment if .env exists
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+
+MODE="${1:-}"
+
+case "$MODE" in
+  --dev)
+    echo ""
+    echo "Starting development mode with hot reload..."
+    echo "  Server:   http://localhost:${PORT:-3000}"
+    echo "  Preview:  http://localhost:${PORT:-3000}/preview"
+    echo "  Health:   http://localhost:${PORT:-3000}/health"
+    echo ""
+    npm run dev
+    ;;
+
+  --preview)
+    echo ""
+    echo "Starting server and opening widget preview..."
+    echo ""
+    # Start server in background
+    npm run dev &
+    SERVER_PID=$!
+
+    # Wait for server to start
+    sleep 2
+
+    # Open preview in browser
+    if command -v open >/dev/null 2>&1; then
+      open "http://localhost:${PORT:-3000}/preview"
+    elif command -v xdg-open >/dev/null 2>&1; then
+      xdg-open "http://localhost:${PORT:-3000}/preview"
+    else
+      echo "Open http://localhost:${PORT:-3000}/preview in your browser"
+    fi
+
+    # Wait for server process
+    wait $SERVER_PID
+    ;;
+
+  --stdio)
+    echo ""
+    echo "Starting stdio mode (for MCP Inspector)..."
+    echo ""
+    HTTP_MODE=false node dist/server/index.js
+    ;;
+
+  --help|-h)
+    echo ""
+    echo "{{appName}} - Server Launcher"
+    echo ""
+    echo "Usage:"
+    echo "  ./START.sh              Start HTTP server (default)"
+    echo "  ./START.sh --dev        Dev mode with hot reload + logs"
+    echo "  ./START.sh --preview    Open widget preview in browser"
+    echo "  ./START.sh --stdio      Stdio mode for MCP Inspector"
+    echo "  ./START.sh --help       Show this help"
+    echo ""
+    ;;
+
+  *)
+    # Default: Start HTTP server in production mode
+
+    # Build if needed
+    if [ ! -f dist/server/index.js ]; then
+      echo "Building server..."
+      npm run build:server
+    fi
+
+    echo ""
+    echo "Starting HTTP server..."
+    echo "  MCP endpoint: http://localhost:${PORT:-3000}/mcp"
+    echo "  Health:       http://localhost:${PORT:-3000}/health"
+    echo ""
+
+    HTTP_MODE=true node dist/server/index.js
+    ;;
+esac
